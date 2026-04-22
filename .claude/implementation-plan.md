@@ -2,11 +2,11 @@
 
 ## Phase 1 — Project Setup & Infrastructure
 
-- [x] Initialize monorepo with Bun workspaces (`/client`, `/server`)
-- [x] Scaffold Express + TypeScript server
-- [x] Scaffold React + Vite + TypeScript client
-- [x] Configure ESLint + Prettier across both packages
-- [x] Set up dotenv for environment variables
+- [ ] Initialize monorepo with npm workspaces (`/client`, `/server`)
+- [ ] Scaffold Express + TypeScript server
+- [ ] Scaffold React + Vite + TypeScript client
+- [ ] Configure ESLint + Prettier across both packages
+- [ ] Set up dotenv for environment variables
 - [ ] Setup and connect to PostgreSQL and confirm connection
 
 
@@ -95,3 +95,4 @@
 - [ ] Production Docker build optimizations
 - [ ] Environment variable documentation (`.env.example`)
 - [ ] End-to-end QA of all major flows
+
