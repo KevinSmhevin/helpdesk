@@ -10,7 +10,7 @@ Use Context7 MCP (`resolve-library-id` → `query-docs`) to fetch up-to-date doc
 
 - **Runtime:** Bun
 - **Backend:** Express + TypeScript (`/server`)
-- **Frontend:** React + Vite + TypeScript + Tailwind v4 + React Router v6 (`/client`)
+- **Frontend:** React + Vite + TypeScript + Tailwind v4 + React Router v6 + shadcn/ui (`/client`)
 - **Database:** PostgreSQL via Prisma
 - **Auth:** Better Auth v1 (email/password, Prisma adapter)
 - **AI:** Anthropic Claude (`@anthropic-ai/sdk`)
@@ -24,8 +24,10 @@ helpdesk/
 ├── client/
 │   └── src/
 │       ├── lib/
-│       │   └── auth-client.ts      # Better Auth React client singleton
+│       │   ├── auth-client.ts      # Better Auth React client singleton
+│       │   └── utils.ts            # shadcn cn() utility
 │       ├── components/
+│       │   ├── ui/                 # shadcn components (button, input, label, card, …)
 │       │   ├── Layout.tsx          # NavBar + <Outlet />
 │       │   └── NavBar.tsx          # User name + sign out
 │       ├── pages/
@@ -145,6 +147,14 @@ Use the `ProtectedRoute` component in `App.tsx` to guard any route that requires
 - **AI responses:** auto-sent on ticket creation, no agent approval needed
 - **Email:** inbound via SendGrid parse webhook; replies thread to existing tickets
 - **Routing:** tickets auto-assigned to agent/team based on category
+
+## UI Components (shadcn/ui)
+
+- **Installed:** shadcn/ui with the default theme (style: default, base color: zinc, CSS variables enabled)
+- **Adding components:** `bunx shadcn@latest add <component>` from the `client/` directory
+- **Import alias:** `@` resolves to `client/src/` — always use `@/components/ui/...` not relative paths
+- **Theme tokens:** Use semantic CSS variables (`bg-muted`, `text-destructive`, `text-foreground`, etc.) rather than hardcoded Tailwind colors so the theme stays consistent
+- **Tailwind v4:** Configured via `@tailwindcss/vite` plugin — no `tailwind.config.js` file; theme is defined in `src/index.css`
 
 ## Best Practices
 
