@@ -1,30 +1,26 @@
-import { useEffect, useState } from 'react'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom'
+import { authClient } from './lib/auth-client'
+import Layout from './components/Layout'
+import HomePage from './pages/HomePage'
+import LoginPage from './pages/LoginPage'
 
-function Home() {
-  const [status, setStatus] = useState<'loading' | 'ok' | 'error'>('loading')
-
-  useEffect(() => {
-    fetch('/api/health')
-      .then((res) => res.json())
-      .then((data) => setStatus(data.status === 'ok' ? 'ok' : 'error'))
-      .catch(() => setStatus('error'))
-  }, [])
-
-  return (
-    <div className="p-4">
-      {status === 'loading' && <p>Checking server...</p>}
-      {status === 'ok' && <p>Server is up and running</p>}
-      {status === 'error' && <p>Could not reach server</p>}
-    </div>
-  )
+function ProtectedRoute() {
+  const { data: session, isPending } = authClient.useSession()
+  if (isPending) return null
+  if (!session) return <Navigate to="/login" replace />
+  return <Outlet />
 }
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Home />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route element={<ProtectedRoute />}>
+          <Route element={<Layout />}>
+            <Route path="/" element={<HomePage />} />
+          </Route>
+        </Route>
       </Routes>
     </BrowserRouter>
   )
