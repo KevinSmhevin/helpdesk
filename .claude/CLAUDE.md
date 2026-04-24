@@ -70,18 +70,13 @@ cd server && bunx prisma generate
 cd server && bunx prisma studio
 cd server && bun prisma/seed.ts
 
-# E2E tests (one-time setup)
-createdb helpdesk_test               # create test DB
-cd e2e && bunx playwright install    # install browsers
-
-# E2E tests (run)
-bun run test:e2e                     # from root
-cd e2e && bun run test:ui            # interactive UI mode
+# E2E tests — see playwright-e2e-writer agent for full setup and run instructions
+bun run test:e2e
 ```
 
 ## Environment
 
-Copy `server/.env` from `server/.env.example` for development. For E2E tests, also create `server/.env.test` with the same keys pointing to the `helpdesk_test` database (port 3001, `ALLOWED_ORIGINS=http://localhost:5174`). Both files are gitignored.
+Copy `server/.env` from `server/.env.example`. Both `.env` and `.env.test` are gitignored. For E2E test environment setup see the playwright-e2e-writer agent.
 
 Required vars:
 
@@ -193,6 +188,21 @@ For routes that require the `admin` role, use `AdminRoute` instead:
 - **Import alias:** `@` resolves to `client/src/` — always use `@/components/ui/...` not relative paths
 - **Theme tokens:** Use semantic CSS variables (`bg-muted`, `text-destructive`, `text-foreground`, etc.) rather than hardcoded Tailwind colors so the theme stays consistent
 - **Tailwind v4:** Configured via `@tailwindcss/vite` plugin — no `tailwind.config.js` file; theme is defined in `src/index.css`
+
+## E2E Testing
+
+After implementing a feature or page, use the **`playwright-e2e-writer` agent** to write Playwright tests for it. Do not write E2E tests yourself — always delegate to this agent.
+
+**When to invoke it:**
+- After building a new page or user flow
+- After adding or changing auth/authorization behavior
+- After modifying form interactions or UI state
+
+**How to invoke it:** describe the feature that was just built and ask for tests. Example:
+
+> "I just built the ticket list page with filtering and status updates. Write E2E tests for it."
+
+The agent knows the test infrastructure (ports, seeded users, file locations) and Playwright best practices. Tests go in `e2e/tests/<feature>.spec.ts`.
 
 ## Best Practices
 
