@@ -21,6 +21,11 @@ Use Context7 MCP (`resolve-library-id` → `query-docs`) to fetch up-to-date doc
 
 ```
 helpdesk/
+├── e2e/
+│   ├── tests/                      # Playwright test files go here
+│   ├── playwright.config.ts        # Playwright config (loads .env.test, webServer)
+│   ├── global-setup.ts             # Migrate + seed test DB before suite
+│   └── global-teardown.ts          # Truncate test DB after suite
 ├── client/
 │   └── src/
 │       ├── lib/
@@ -39,11 +44,14 @@ helpdesk/
     ├── src/
     │   ├── lib/
     │   │   ├── auth.ts             # Better Auth config
+    │   │   ├── middleware.ts       # requireAuth / requireAdmin Express middleware
     │   │   └── prisma.ts           # Prisma client singleton
     │   └── index.ts                # Express app entry point
     └── prisma/
         ├── schema.prisma
-        └── seed.ts
+        ├── seed.ts                 # Seeds admin user (prod/dev)
+        ├── seed-test.ts            # Seeds admin + agent users (test DB only)
+        └── teardown.ts             # Truncates all tables (used by global-teardown)
 ```
 
 ## Commands
@@ -61,11 +69,21 @@ cd server && bunx prisma migrate dev
 cd server && bunx prisma generate
 cd server && bunx prisma studio
 cd server && bun prisma/seed.ts
+
+# E2E tests (one-time setup)
+createdb helpdesk_test               # create test DB
+cd e2e && bunx playwright install    # install browsers
+
+# E2E tests (run)
+bun run test:e2e                     # from root
+cd e2e && bun run test:ui            # interactive UI mode
 ```
 
 ## Environment
 
-Copy `server/.env` from `server/.env.example`. Required vars:
+Copy `server/.env` from `server/.env.example` for development. For E2E tests, also create `server/.env.test` with the same keys pointing to the `helpdesk_test` database (port 3001, `ALLOWED_ORIGINS=http://localhost:5174`). Both files are gitignored.
+
+Required vars:
 
 | Variable | Description |
 |---|---|
