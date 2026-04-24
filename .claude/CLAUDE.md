@@ -32,8 +32,9 @@ helpdesk/
 │       │   └── NavBar.tsx          # User name + sign out
 │       ├── pages/
 │       │   ├── LoginPage.tsx
-│       │   └── HomePage.tsx
-│       └── App.tsx                 # Routes + ProtectedRoute
+│       │   ├── HomePage.tsx
+│       │   └── UsersPage.tsx       # Admin-only: /users
+│       └── App.tsx                 # Routes + ProtectedRoute + AdminRoute
 └── server/
     ├── src/
     │   ├── lib/
@@ -138,6 +139,25 @@ Use the `ProtectedRoute` component in `App.tsx` to guard any route that requires
 ```
 
 `ProtectedRoute` redirects unauthenticated users to `/login` and handles the loading state. Do not duplicate this logic in individual pages.
+
+For routes that require the `admin` role, use `AdminRoute` instead:
+
+```tsx
+<Route element={<AdminRoute />}>
+  <Route element={<Layout />}>
+    <Route path="/admin-only-page" element={<AdminOnlyPage />} />
+  </Route>
+</Route>
+```
+
+`AdminRoute` redirects unauthenticated users to `/login` and non-admins to `/`. It reads `session.user.role` from the Better Auth session.
+
+## Dev Users
+
+| Email | Password | Role |
+|---|---|---|
+| *(set via `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`)* | *(set via env)* | admin |
+| `agent@example.com` | `password123` | agent |
 
 ## Domain
 
