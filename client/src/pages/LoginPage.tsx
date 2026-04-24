@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
 
 const schema = z.object({
   email: z.string().min(1, 'Email is required').email('Enter a valid email address'),
@@ -27,7 +28,22 @@ export default function LoginPage() {
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({ resolver: zodResolver(schema), mode: 'onTouched' })
 
-  if (isPending) return null
+  if (isPending) return (
+    <div className="min-h-screen bg-muted flex items-center justify-center">
+      <div className="w-full max-w-sm rounded-xl border border-border p-6 bg-background space-y-5">
+        <Skeleton className="h-6 w-44" />
+        <div className="space-y-1.5">
+          <Skeleton className="h-4 w-10" />
+          <Skeleton className="h-9 w-full" />
+        </div>
+        <div className="space-y-1.5">
+          <Skeleton className="h-4 w-16" />
+          <Skeleton className="h-9 w-full" />
+        </div>
+        <Skeleton className="h-9 w-full" />
+      </div>
+    </div>
+  )
   if (session) return <Navigate to="/" replace />
 
   const onSubmit = async (values: FormValues) => {

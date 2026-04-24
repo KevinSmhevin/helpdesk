@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Skeleton } from '@/components/ui/skeleton'
 
 export default function HomePage() {
   const [status, setStatus] = useState<'loading' | 'ok' | 'error'>('loading')
@@ -13,26 +14,24 @@ export default function HomePage() {
   return (
     <div className="max-w-7xl mx-auto px-6 py-8">
       <h1 className="text-2xl font-semibold text-gray-900 mb-6">Dashboard</h1>
-      <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border text-sm">
-        {status === 'loading' && (
-          <>
-            <span className="size-2 rounded-full bg-gray-300 animate-pulse" />
-            <span className="text-gray-500">Checking server…</span>
-          </>
-        )}
-        {status === 'ok' && (
-          <>
-            <span className="size-2 rounded-full bg-green-500" />
-            <span className="text-gray-600">Server is up and running</span>
-          </>
-        )}
-        {status === 'error' && (
-          <>
-            <span className="size-2 rounded-full bg-red-500" />
-            <span className="text-red-600">Could not reach server</span>
-          </>
-        )}
-      </div>
+      {status === 'loading' ? (
+        <Skeleton className="h-9 w-52 rounded-lg" />
+      ) : (
+        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border text-sm">
+          {status === 'ok' && (
+            <>
+              <span className="size-2 rounded-full bg-green-500" />
+              <span className="text-gray-600">Server is up and running</span>
+            </>
+          )}
+          {status === 'error' && (
+            <>
+              <span className="size-2 rounded-full bg-red-500" />
+              <span className="text-red-600">Could not reach server</span>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }
