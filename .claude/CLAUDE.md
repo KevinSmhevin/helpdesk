@@ -11,6 +11,7 @@ Use Context7 MCP (`resolve-library-id` → `query-docs`) to fetch up-to-date doc
 - **Runtime:** Bun
 - **Backend:** Express + TypeScript (`/server`)
 - **Frontend:** React + Vite + TypeScript + Tailwind v4 + React Router v6 + shadcn/ui (`/client`)
+- **Data fetching:** axios + TanStack Query v5 (`@tanstack/react-query`)
 - **Database:** PostgreSQL via Prisma
 - **Auth:** Better Auth v1 (email/password, Prisma adapter)
 - **AI:** Anthropic Claude (`@anthropic-ai/sdk`)
@@ -29,6 +30,7 @@ helpdesk/
 ├── client/
 │   └── src/
 │       ├── lib/
+│       │   ├── api.ts              # axios instance (withCredentials: true)
 │       │   ├── auth-client.ts      # Better Auth React client singleton
 │       │   └── utils.ts            # shadcn cn() utility
 │       ├── components/
@@ -181,6 +183,43 @@ For routes that require the `admin` role, use `AdminRoute` instead:
 - **Email:** inbound via SendGrid parse webhook; replies thread to existing tickets
 - **Routing:** tickets auto-assigned to agent/team based on category
 
+## Data Fetching
+
+All client-side API calls use **axios** via the shared instance and **TanStack Query v5** for caching and state.
+
+### axios instance
+
+Import from `@/lib/api` — never use `fetch` directly for API calls:
+
+```ts
+import api from '@/lib/api'
+```
+
+The instance is pre-configured with `withCredentials: true` so session cookies are sent on every request.
+
+### TanStack Query
+
+`QueryClientProvider` is mounted in `main.tsx`. Use `useQuery` for reads and `useMutation` for writes:
+
+```ts
+// Read
+const { data, isLoading, isError } = useQuery({
+  queryKey: ['resource'],
+  queryFn: () => api.get<Resource[]>('/api/resource').then((r) => r.data),
+})
+
+// Write — update cache directly on success instead of refetching
+const mutation = useMutation({
+  mutationFn: (body: Body) => api.post<Resource>('/api/resource', body).then((r) => r.data),
+  onSuccess: (newItem) => {
+    queryClient.setQueryData<Resource[]>(['resource'], (prev = []) => [newItem, ...prev])
+  },
+})
+```
+
+- Prefer `setQueryData` over `invalidateQueries` for mutations where the response includes the full updated record.
+- Surface server error messages from `err.response.data.error` in `onError`.
+
 ## UI Components (shadcn/ui)
 
 - **Installed:** shadcn/ui with the default theme (style: default, base color: zinc, CSS variables enabled)
@@ -212,3 +251,5 @@ The agent knows the test infrastructure (ports, seeded users, file locations) an
 - **Auth client:** Import the singleton from `client/src/lib/auth-client.ts` — never call `createAuthClient()` more than once.
 - **CORS:** `ALLOWED_ORIGINS` is the single source of truth. Both `cors()` middleware and Better Auth's `trustedOrigins` read from it.
 - **Types:** Prefer TypeScript types inferred from Prisma and Better Auth (`typeof auth.$Infer.Session`) over hand-written interfaces.
+- **API calls:** Always use the axios instance from `@/lib/api` — never call `fetch` directly for `/api/*` routes.
+- **Server state:** Use TanStack Query (`useQuery` / `useMutation`) for all server state — no ad-hoc `useState` + `useEffect` fetch patterns.

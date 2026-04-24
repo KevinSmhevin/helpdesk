@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { authClient } from '@/lib/auth-client'
+import api from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,79 +16,45 @@ type User = {
 
 type FormState = { name: string; email: string; password: string }
 
+const EMPTY_FORM: FormState = { name: '', email: '', password: '' }
+
 export default function UsersPage() {
   const { data: session } = authClient.useSession()
-  const [users, setUsers] = useState<User[]>([])
-  const [loading, setLoading] = useState(true)
-  const [fetchError, setFetchError] = useState<string | null>(null)
+  const queryClient = useQueryClient()
 
-  const [form, setForm] = useState<FormState>({ name: '', email: '', password: '' })
-  const [submitting, setSubmitting] = useState(false)
+  const [form, setForm] = useState<FormState>(EMPTY_FORM)
   const [formError, setFormError] = useState<string | null>(null)
 
-  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const { data: users = [], isLoading, isError } = useQuery<User[]>({
+    queryKey: ['users'],
+    queryFn: () => api.get<User[]>('/api/users').then((r) => r.data),
+  })
 
-  useEffect(() => {
-    fetchUsers()
-  }, [])
+  const createUser = useMutation({
+    mutationFn: (body: FormState) => api.post<User>('/api/users', body).then((r) => r.data),
+    onSuccess: (newUser) => {
+      queryClient.setQueryData<User[]>(['users'], (prev = []) => [newUser, ...prev])
+      setForm(EMPTY_FORM)
+      setFormError(null)
+    },
+    onError: (err: unknown) => {
+      const message = (err as { response?: { data?: { error?: string } } })
+        ?.response?.data?.error ?? 'Failed to create user'
+      setFormError(message)
+    },
+  })
 
-  async function fetchUsers() {
-    setLoading(true)
-    setFetchError(null)
-    try {
-      const res = await fetch('/api/users', { credentials: 'include' })
-      if (!res.ok) throw new Error('Failed to load users')
-      setUsers(await res.json())
-    } catch {
-      setFetchError('Could not load users. Please try again.')
-    } finally {
-      setLoading(false)
-    }
-  }
+  const deleteUser = useMutation({
+    mutationFn: (id: string) => api.delete(`/api/users/${id}`),
+    onSuccess: (_data, id) => {
+      queryClient.setQueryData<User[]>(['users'], (prev = []) => prev.filter((u) => u.id !== id))
+    },
+  })
 
-  async function handleCreate(e: { preventDefault(): void }) {
+  function handleCreate(e: { preventDefault(): void }) {
     e.preventDefault()
     setFormError(null)
-    setSubmitting(true)
-    try {
-      const res = await fetch('/api/users', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        setFormError(data.error ?? 'Failed to create user')
-        return
-      }
-      setUsers((prev) => [data, ...prev])
-      setForm({ name: '', email: '', password: '' })
-    } catch {
-      setFormError('Something went wrong. Please try again.')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  async function handleDelete(id: string) {
-    setDeletingId(id)
-    try {
-      const res = await fetch(`/api/users/${id}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      })
-      if (!res.ok) {
-        const data = await res.json()
-        alert(data.error ?? 'Failed to delete user')
-        return
-      }
-      setUsers((prev) => prev.filter((u) => u.id !== id))
-    } catch {
-      alert('Something went wrong. Please try again.')
-    } finally {
-      setDeletingId(null)
-    }
+    createUser.mutate(form)
   }
 
   return (
@@ -133,8 +101,8 @@ export default function UsersPage() {
             <p className="sm:col-span-3 text-sm text-destructive">{formError}</p>
           )}
           <div className="sm:col-span-3">
-            <Button type="submit" disabled={submitting}>
-              {submitting ? 'Creating…' : 'Create agent'}
+            <Button type="submit" disabled={createUser.isPending}>
+              {createUser.isPending ? 'Creating…' : 'Create agent'}
             </Button>
           </div>
         </form>
@@ -142,10 +110,10 @@ export default function UsersPage() {
 
       {/* User list */}
       <section>
-        {loading ? (
+        {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : fetchError ? (
-          <p className="text-sm text-destructive">{fetchError}</p>
+        ) : isError ? (
+          <p className="text-sm text-destructive">Could not load users. Please try again.</p>
         ) : users.length === 0 ? (
           <p className="text-sm text-muted-foreground">No users yet.</p>
         ) : (
@@ -184,10 +152,12 @@ export default function UsersPage() {
                         <Button
                           variant="destructive"
                           size="xs"
-                          disabled={deletingId === user.id}
-                          onClick={() => handleDelete(user.id)}
+                          disabled={deleteUser.isPending && deleteUser.variables === user.id}
+                          onClick={() => deleteUser.mutate(user.id)}
                         >
-                          {deletingId === user.id ? 'Deleting…' : 'Delete'}
+                          {deleteUser.isPending && deleteUser.variables === user.id
+                            ? 'Deleting…'
+                            : 'Delete'}
                         </Button>
                       )}
                     </td>
