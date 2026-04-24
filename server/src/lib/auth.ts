@@ -9,6 +9,14 @@ export const auth = betterAuth({
   database: prismaAdapter(prisma, { provider: 'postgresql' }),
   emailAndPassword: { enabled: true, disableSignUp: true },
   trustedOrigins,
+  session: {
+    expiresIn: 60 * 60 * 24 * 7,
+    updateAge: 60 * 60 * 24,
+    cookieCache: { enabled: true, maxAge: 60 * 5 },
+  },
+  advanced: {
+    useSecureCookies: process.env.NODE_ENV === 'production',
+  },
   user: {
     additionalFields: {
       role: {

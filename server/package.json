@@ -15,7 +15,9 @@
     "better-auth": "^1.6.7",
     "cors": "^2.8.6",
     "dotenv": "^16",
-    "express": "^4"
+    "express": "^4",
+    "express-rate-limit": "^8.4.0",
+    "helmet": "^8.1.0"
   },
   "devDependencies": {
     "@types/bun": "latest",
