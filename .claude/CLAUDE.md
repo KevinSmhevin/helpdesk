@@ -14,6 +14,8 @@ Use Context7 MCP (`resolve-library-id` → `query-docs`) to fetch up-to-date doc
 - **Data fetching:** axios + TanStack Query v5 (`@tanstack/react-query`)
 - **Database:** PostgreSQL via Prisma
 - **Auth:** Better Auth v1 (email/password, Prisma adapter)
+- **Validation:** Zod — schemas defined in `@helpdesk/core`, used on server (`safeParse`) and client (`zodResolver`)
+- **Forms:** React Hook Form + `@hookform/resolvers/zod` (`react-hook-form`) — client forms only
 - **AI:** Anthropic Claude (`@anthropic-ai/sdk`)
 - **Email:** SendGrid (inbound parse webhook)
 - **Background jobs:** pg-boss
@@ -22,6 +24,11 @@ Use Context7 MCP (`resolve-library-id` → `query-docs`) to fetch up-to-date doc
 
 ```
 helpdesk/
+├── core/
+│   └── src/
+│       ├── schemas/
+│       │   └── user.ts             # Shared Zod schemas + inferred types
+│       └── index.ts                # Re-exports
 ├── e2e/
 │   ├── tests/                      # Playwright test files go here
 │   ├── playwright.config.ts        # Playwright config (loads .env.test, webServer)
@@ -33,6 +40,8 @@ helpdesk/
 │       │   ├── api.ts              # axios instance (withCredentials: true)
 │       │   ├── auth-client.ts      # Better Auth React client singleton
 │       │   └── utils.ts            # shadcn cn() utility
+│       ├── test/
+│       │   └── setup.ts            # Vitest setup — imports @testing-library/jest-dom
 │       ├── components/
 │       │   ├── ui/                 # shadcn components (button, input, label, card, …)
 │       │   ├── Layout.tsx          # NavBar + <Outlet />
@@ -48,7 +57,9 @@ helpdesk/
     │   │   ├── auth.ts             # Better Auth config
     │   │   ├── middleware.ts       # requireAuth / requireAdmin Express middleware
     │   │   └── prisma.ts           # Prisma client singleton
-    │   └── index.ts                # Express app entry point
+    │   ├── routes/
+    │   │   └── users.ts            # User management routes (GET /api/users, POST, DELETE)
+    │   └── index.ts                # Express app entry point — mounts routers
     └── prisma/
         ├── schema.prisma
         ├── seed.ts                 # Seeds admin user (prod/dev)
@@ -71,6 +82,10 @@ cd server && bunx prisma migrate dev
 cd server && bunx prisma generate
 cd server && bunx prisma studio
 cd server && bun prisma/seed.ts
+
+# Unit / component tests (from client/)
+bun run test          # run once
+bun run test:watch    # watch mode
 
 # E2E tests — see playwright-e2e-writer agent for full setup and run instructions
 bun run test:e2e
@@ -228,6 +243,45 @@ const mutation = useMutation({
 - **Theme tokens:** Use semantic CSS variables (`bg-muted`, `text-destructive`, `text-foreground`, etc.) rather than hardcoded Tailwind colors so the theme stays consistent
 - **Tailwind v4:** Configured via `@tailwindcss/vite` plugin — no `tailwind.config.js` file; theme is defined in `src/index.css`
 
+## Unit / Component Testing
+
+Client-side unit and component tests use **Vitest** + **React Testing Library**.
+
+### Stack
+
+- **Test runner:** Vitest (configured in `client/vite.config.ts`, jsdom environment, globals enabled)
+- **Rendering:** `@testing-library/react`
+- **User interactions:** `@testing-library/user-event`
+- **Matchers:** `@testing-library/jest-dom` (imported in `client/src/test/setup.ts`)
+
+### Test file location
+
+Co-locate tests with their component: `src/pages/Foo.tsx` → `src/pages/Foo.test.tsx`.
+
+### Conventions
+
+**Mocking:**
+- Mock `@/lib/api` and `@/lib/auth-client` with `vi.mock` at the top of each test file
+- Always cast partial `useSession` mocks with `as unknown as ReturnType<typeof authClient.useSession>` to satisfy TypeScript
+- Use `vi.fn()` for all mock implementations; call `vi.clearAllMocks()` in a top-level `beforeEach`
+
+**Providers:**
+- Wrap every render in a fresh `QueryClient` (with `retry: false`) + `QueryClientProvider` + `MemoryRouter`
+- Pass `future={{ v7_startTransition: true, v7_relativeSplatPath: true }}` to `MemoryRouter` to silence React Router v6 warnings
+
+**Helpers:**
+- Extract a `renderPage()` helper per file that wires up all providers and the session mock
+- Extract shared mock setup (e.g. `mockGetUsers()`) and repeated interactions (e.g. `fillAndSubmitForm()`) into named helpers above the `describe` blocks
+- Use per-`describe` `beforeEach` to set the GET mock when all tests in a group share the same response
+
+**What to test:**
+- Loading state (skeleton visible, data not yet rendered)
+- Error state (error message shown on rejected query)
+- Empty state (empty-list message)
+- Happy path renders (correct data in the DOM)
+- Mutations: success (cache updated, form cleared) and error (error message surfaced)
+- Access control: buttons/elements hidden or shown based on session user
+
 ## E2E Testing
 
 After implementing a feature or page, use the **`playwright-e2e-writer` agent** to write Playwright tests for it. Do not write E2E tests yourself — always delegate to this agent.
@@ -253,3 +307,9 @@ The agent knows the test infrastructure (ports, seeded users, file locations) an
 - **Types:** Prefer TypeScript types inferred from Prisma and Better Auth (`typeof auth.$Infer.Session`) over hand-written interfaces.
 - **API calls:** Always use the axios instance from `@/lib/api` — never call `fetch` directly for `/api/*` routes.
 - **Server state:** Use TanStack Query (`useQuery` / `useMutation`) for all server state — no ad-hoc `useState` + `useEffect` fetch patterns.
+- **Shared schemas:** Define Zod schemas in `core/src/schemas/<resource>.ts` and re-export from `core/src/index.ts`. Import as `@helpdesk/core` in both server and client. Never duplicate a schema — one source of truth for validation rules on both sides.
+- **Request validation:** On the server, call `Schema.safeParse(req.body)` and return the first `issues[0].message` as `{ error: string }` with status 400 on failure. Schema fields should use custom messages so errors are user-friendly (e.g. `z.string().min(3, 'Name must be at least 3 characters')`).
+- **Client forms:** Use React Hook Form with `zodResolver` from `@helpdesk/core` for all forms. Initialise with `useForm<SchemaInput>({ resolver: zodResolver(Schema), defaultValues: {...} })`. Wire inputs with `{...register('field')}` spread first, then add `id` and any other HTML attributes after — never override the `name` attribute that register sets (RHF uses `event.target.name` internally to dispatch changes). Display per-field errors from `formState.errors.<field>.message` beneath each input. Use `setError('root', { message })` + `formState.errors.root` for server-returned errors.
+- **No hardcoded strings:** Never hardcode magic strings inline. Use Prisma-generated enums (e.g. `Role.agent` from `@prisma/client`) for enum values. Define error message strings as a `const` object at the top of the file (e.g. `const Errors = { EMAIL_TAKEN: '...' } as const`) and reference them by key.
+- **Async route handlers:** Do not wrap async route handlers in try/catch — Express 5 automatically forwards thrown errors and rejected promises to the error handler. Keep handlers flat and let errors propagate.
+- **Route modules:** Group related routes in `server/src/routes/<resource>.ts`, export a `Router`, and mount it in `index.ts` with `app.use('/api/<resource>', router)`. Apply shared middleware (e.g. `requireAdmin`) once via `router.use(...)` at the top of the module rather than repeating it on each handler.

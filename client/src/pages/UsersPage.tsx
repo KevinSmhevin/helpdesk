@@ -1,11 +1,16 @@
 import { useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { ChevronDown } from 'lucide-react'
 import { authClient } from '@/lib/auth-client'
 import api from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
+import { CreateUserSchema } from '@helpdesk/core'
+import type { CreateUserInput } from '@helpdesk/core'
 
 type User = {
   id: string
@@ -15,16 +20,16 @@ type User = {
   createdAt: string
 }
 
-type FormState = { name: string; email: string; password: string }
-
-const EMPTY_FORM: FormState = { name: '', email: '', password: '' }
-
 export default function UsersPage() {
   const { data: session } = authClient.useSession()
   const queryClient = useQueryClient()
 
-  const [form, setForm] = useState<FormState>(EMPTY_FORM)
-  const [formError, setFormError] = useState<string | null>(null)
+  const [isOpen, setIsOpen] = useState(false)
+
+  const form = useForm<CreateUserInput>({
+    resolver: zodResolver(CreateUserSchema),
+    defaultValues: { name: '', email: '', password: '' },
+  })
 
   const { data: users = [], isLoading, isError } = useQuery<User[]>({
     queryKey: ['users'],
@@ -32,16 +37,17 @@ export default function UsersPage() {
   })
 
   const createUser = useMutation({
-    mutationFn: (body: FormState) => api.post<User>('/api/users', body).then((r) => r.data),
+    mutationFn: (body: CreateUserInput) => api.post<User>('/api/users', body).then((r) => r.data),
     onSuccess: (newUser) => {
       queryClient.setQueryData<User[]>(['users'], (prev = []) => [newUser, ...prev])
-      setForm(EMPTY_FORM)
-      setFormError(null)
+      form.reset()
+      setIsOpen(false)
     },
     onError: (err: unknown) => {
-      const message = (err as { response?: { data?: { error?: string } } })
-        ?.response?.data?.error ?? 'Failed to create user'
-      setFormError(message)
+      const message =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+        'Failed to create user'
+      form.setError('root', { message })
     },
   })
 
@@ -52,10 +58,8 @@ export default function UsersPage() {
     },
   })
 
-  function handleCreate(e: { preventDefault(): void }) {
-    e.preventDefault()
-    setFormError(null)
-    createUser.mutate(form)
+  function onSubmit(data: CreateUserInput) {
+    createUser.mutate(data)
   }
 
   return (
@@ -63,50 +67,84 @@ export default function UsersPage() {
       <h1 className="text-2xl font-semibold text-foreground">Users</h1>
 
       {/* Create user form */}
-      <section className="border border-border rounded-xl p-6 bg-background space-y-4">
-        <h2 className="text-base font-medium text-foreground">Add agent</h2>
-        <form onSubmit={handleCreate} className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="name">Name</Label>
-            <Input
-              id="name"
-              placeholder="Jane Smith"
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              required
-            />
+      <section className="border border-border rounded-xl bg-background">
+        <button
+          type="button"
+          aria-expanded={isOpen}
+          aria-controls="add-agent-form"
+          onClick={() => setIsOpen((prev) => !prev)}
+          className="flex w-full items-center justify-between px-6 py-4 text-base font-medium text-foreground"
+        >
+          Add agent
+          <ChevronDown
+            className={`size-4 text-muted-foreground transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+            aria-hidden="true"
+          />
+        </button>
+
+        {isOpen && (
+          <div id="add-agent-form" className="px-6 pb-6">
+            <form
+              onSubmit={form.handleSubmit(onSubmit)}
+              autoComplete="off"
+              className="grid grid-cols-1 sm:grid-cols-3 gap-4"
+            >
+              <div className="space-y-1.5">
+                <Label htmlFor="name">Name</Label>
+                <Input
+                  {...form.register('name')}
+                  id="name"
+                  autoComplete="off"
+                  placeholder="Jane Smith"
+                />
+                {form.formState.errors.name && (
+                  <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  {...form.register('email')}
+                  id="email"
+                  type="email"
+                  autoComplete="off"
+                  placeholder="jane@example.com"
+                />
+                {form.formState.errors.email && (
+                  <p className="text-sm text-destructive">{form.formState.errors.email.message}</p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  {...form.register('password')}
+                  id="password"
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder="••••••••"
+                />
+                {form.formState.errors.password && (
+                  <p className="text-sm text-destructive">
+                    {form.formState.errors.password.message}
+                  </p>
+                )}
+              </div>
+              {form.formState.errors.root && (
+                <p className="sm:col-span-3 text-sm text-destructive">
+                  {form.formState.errors.root.message}
+                </p>
+              )}
+              <div className="sm:col-span-3">
+                <Button
+                  type="submit"
+                  disabled={form.formState.isSubmitting || createUser.isPending}
+                >
+                  {createUser.isPending ? 'Creating…' : 'Create agent'}
+                </Button>
+              </div>
+            </form>
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="jane@example.com"
-              value={form.email}
-              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-              required
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="••••••••"
-              value={form.password}
-              onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-              required
-            />
-          </div>
-          {formError && (
-            <p className="sm:col-span-3 text-sm text-destructive">{formError}</p>
-          )}
-          <div className="sm:col-span-3">
-            <Button type="submit" disabled={createUser.isPending}>
-              {createUser.isPending ? 'Creating…' : 'Create agent'}
-            </Button>
-          </div>
-        </form>
+        )}
       </section>
 
       {/* User list */}

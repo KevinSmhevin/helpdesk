@@ -30,6 +30,10 @@ function mockGetUsers(users: typeof USERS | [] = USERS) {
   vi.mocked(api.get).mockResolvedValue({ data: users } as AxiosResponse)
 }
 
+async function openAddAgentForm() {
+  await userEvent.click(screen.getByRole('button', { name: /add agent/i }))
+}
+
 async function fillAndSubmitForm(name: string, email: string, password: string) {
   await userEvent.type(screen.getByLabelText('Name'), name)
   await userEvent.type(screen.getByLabelText('Email'), email)
@@ -141,8 +145,41 @@ describe('UsersPage', () => {
   describe('create user form', () => {
     beforeEach(() => mockGetUsers([]))
 
-    it('renders the add agent form fields', () => {
+    it('is collapsed by default', () => {
       renderPage()
+
+      expect(screen.getByRole('button', { name: /add agent/i })).toHaveAttribute('aria-expanded', 'false')
+      expect(screen.queryByLabelText('Name')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('Email')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('Password')).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /create agent/i })).not.toBeInTheDocument()
+    })
+
+    it('expands when the toggle is clicked', async () => {
+      renderPage()
+
+      await openAddAgentForm()
+
+      expect(screen.getByRole('button', { name: /add agent/i })).toHaveAttribute('aria-expanded', 'true')
+      expect(screen.getByLabelText('Name')).toBeInTheDocument()
+      expect(screen.getByLabelText('Email')).toBeInTheDocument()
+      expect(screen.getByLabelText('Password')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /create agent/i })).toBeInTheDocument()
+    })
+
+    it('collapses again when the toggle is clicked a second time', async () => {
+      renderPage()
+
+      await openAddAgentForm()
+      await userEvent.click(screen.getByRole('button', { name: /add agent/i }))
+
+      expect(screen.queryByLabelText('Name')).not.toBeInTheDocument()
+    })
+
+    it('renders the add agent form fields when expanded', async () => {
+      renderPage()
+
+      await openAddAgentForm()
 
       expect(screen.getByLabelText('Name')).toBeInTheDocument()
       expect(screen.getByLabelText('Email')).toBeInTheDocument()
@@ -154,6 +191,7 @@ describe('UsersPage', () => {
       vi.mocked(api.post).mockResolvedValue({ data: NEW_USER } as AxiosResponse)
       renderPage()
 
+      await openAddAgentForm()
       await fillAndSubmitForm('Carol', 'carol@example.com', 'password123')
 
       await screen.findByText('Carol')
@@ -164,22 +202,61 @@ describe('UsersPage', () => {
       })
     })
 
+    it('collapses the form after successful creation', async () => {
+      vi.mocked(api.post).mockResolvedValue({ data: NEW_USER } as AxiosResponse)
+      renderPage()
+
+      await openAddAgentForm()
+      await fillAndSubmitForm('Carol', 'carol@example.com', 'password123')
+
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: /add agent/i })).toHaveAttribute('aria-expanded', 'false')
+      )
+      expect(screen.queryByLabelText('Name')).not.toBeInTheDocument()
+    })
+
     it('clears the form after successful creation', async () => {
       vi.mocked(api.post).mockResolvedValue({ data: NEW_USER } as AxiosResponse)
       renderPage()
 
+      await openAddAgentForm()
       await fillAndSubmitForm('Carol', 'carol@example.com', 'password123')
 
-      await screen.findByText('Carol')
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: /add agent/i })).toHaveAttribute('aria-expanded', 'false')
+      )
+      await openAddAgentForm()
+
       expect(screen.getByLabelText('Name')).toHaveValue('')
       expect(screen.getByLabelText('Email')).toHaveValue('')
       expect(screen.getByLabelText('Password')).toHaveValue('')
+    })
+
+    it('shows an error when name is shorter than 3 characters', async () => {
+      renderPage()
+
+      await openAddAgentForm()
+      await fillAndSubmitForm('Jo', 'jo@example.com', 'password123')
+
+      expect(screen.getByText('Name must be at least 3 characters')).toBeInTheDocument()
+      expect(api.post).not.toHaveBeenCalled()
+    })
+
+    it('shows an error when password is shorter than 8 characters', async () => {
+      renderPage()
+
+      await openAddAgentForm()
+      await fillAndSubmitForm('Jane Smith', 'jane@example.com', 'short')
+
+      expect(screen.getByText('Password must be at least 8 characters')).toBeInTheDocument()
+      expect(api.post).not.toHaveBeenCalled()
     })
 
     it('shows server error message on failed creation', async () => {
       vi.mocked(api.post).mockRejectedValue({ response: { data: { error: 'A user with that email already exists' } } })
       renderPage()
 
+      await openAddAgentForm()
       await fillAndSubmitForm('Carol', 'carol@example.com', 'password123')
 
       await screen.findByText('A user with that email already exists')
@@ -189,6 +266,7 @@ describe('UsersPage', () => {
       vi.mocked(api.post).mockRejectedValue(new Error('network error'))
       renderPage()
 
+      await openAddAgentForm()
       await fillAndSubmitForm('Carol', 'carol@example.com', 'password123')
 
       await screen.findByText('Failed to create user')
