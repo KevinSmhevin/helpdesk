@@ -60,6 +60,7 @@ export default function AddAgentForm() {
           <form
             onSubmit={form.handleSubmit(onSubmit)}
             autoComplete="off"
+            noValidate
             className="grid grid-cols-1 sm:grid-cols-3 gap-4"
           >
             <div className="space-y-1.5">
