@@ -13,12 +13,14 @@ const Errors = {
   EMAIL_TAKEN: 'A user with that email already exists',
   USER_NOT_FOUND: 'User not found',
   CANNOT_DELETE_SELF: 'You cannot delete your own account',
+  CANNOT_DELETE_ADMIN: 'Admin accounts cannot be deleted',
 } as const
 
 const CREDENTIAL_PROVIDER_ID = 'credential'
 
 router.get('/', async (_req, res) => {
   const users = await prisma.user.findMany({
+    where: { deletedAt: null },
     select: { id: true, name: true, email: true, role: true, createdAt: true },
     orderBy: { createdAt: 'desc' },
   })
@@ -72,7 +74,7 @@ router.put('/:id', async (req, res) => {
   const { name, email, password } = result.data
   const { id } = req.params
 
-  const user = await prisma.user.findUnique({ where: { id } })
+  const user = await prisma.user.findUnique({ where: { id, deletedAt: null } })
   if (!user) {
     return void res.status(404).json({ error: Errors.USER_NOT_FOUND })
   }
@@ -109,12 +111,22 @@ router.delete('/:id', async (req, res) => {
     return void res.status(400).json({ error: Errors.CANNOT_DELETE_SELF })
   }
 
-  const user = await prisma.user.findUnique({ where: { id } })
+  const user = await prisma.user.findUnique({ where: { id, deletedAt: null } })
   if (!user) {
     return void res.status(404).json({ error: Errors.USER_NOT_FOUND })
   }
 
-  await prisma.user.delete({ where: { id } })
+  if (user.role === Role.admin) {
+    return void res.status(403).json({ error: Errors.CANNOT_DELETE_ADMIN })
+  }
+
+  await prisma.user.update({
+    where: { id },
+    data: { deletedAt: new Date() },
+  })
+
+  await prisma.session.deleteMany({ where: { userId: id } })
+
   res.status(204).send()
 })
 

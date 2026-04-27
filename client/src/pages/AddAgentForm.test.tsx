@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi, beforeEach, describe, it, expect } from 'vitest'
 import type { AxiosResponse } from 'axios'
+import { Role } from '@helpdesk/core'
 import AddAgentForm from './AddAgentForm'
 import api from '@/lib/api'
 
@@ -14,7 +15,7 @@ const NEW_USER = {
   id: 'agent-1',
   name: 'Carol',
   email: 'carol@example.com',
-  role: 'agent',
+  role: Role.agent,
   createdAt: '2024-04-01T00:00:00Z',
 }
 

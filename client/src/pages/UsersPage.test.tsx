@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { vi, beforeEach, describe, it, expect } from 'vitest'
 import type { AxiosResponse } from 'axios'
+import { Role } from '@helpdesk/core'
 import UsersPage from './UsersPage'
 import api from '@/lib/api'
 import { authClient } from '@/lib/auth-client'
@@ -16,15 +17,15 @@ vi.mock('@/lib/auth-client', () => ({
   authClient: { useSession: vi.fn() },
 }))
 
-const ADMIN = { id: 'admin-1', name: 'Admin', email: 'admin@example.com', role: 'admin' }
+const ADMIN = { id: 'admin-1', name: 'Admin', email: 'admin@example.com', role: Role.admin }
 
 const USERS = [
-  { id: 'admin-1', name: 'Admin', email: 'admin@example.com', role: 'admin', createdAt: '2024-01-01T00:00:00Z' },
-  { id: 'agent-1', name: 'Alice', email: 'alice@example.com', role: 'agent', createdAt: '2024-02-01T00:00:00Z' },
-  { id: 'agent-2', name: 'Bob',   email: 'bob@example.com',   role: 'agent', createdAt: '2024-03-01T00:00:00Z' },
+  { id: 'admin-1', name: 'Admin', email: 'admin@example.com', role: Role.admin, createdAt: '2024-01-01T00:00:00Z' },
+  { id: 'agent-1', name: 'Alice', email: 'alice@example.com', role: Role.agent, createdAt: '2024-02-01T00:00:00Z' },
+  { id: 'agent-2', name: 'Bob',   email: 'bob@example.com',   role: Role.agent, createdAt: '2024-03-01T00:00:00Z' },
 ]
 
-const NEW_USER = { id: 'agent-3', name: 'Carol', email: 'carol@example.com', role: 'agent', createdAt: '2024-04-01T00:00:00Z' }
+const NEW_USER = { id: 'agent-3', name: 'Carol', email: 'carol@example.com', role: Role.agent, createdAt: '2024-04-01T00:00:00Z' }
 
 function mockGetUsers(users: typeof USERS | [] = USERS) {
   vi.mocked(api.get).mockResolvedValue({ data: users } as AxiosResponse)
@@ -117,7 +118,7 @@ describe('UsersPage', () => {
       expect(screen.getAllByText(/^(admin|agent)$/)).toHaveLength(USERS.length)
     })
 
-    it('hides the delete button for the logged-in user', async () => {
+    it('hides the delete button for admin users', async () => {
       renderPage()
 
       await screen.findByText('Admin')
@@ -135,7 +136,10 @@ describe('UsersPage', () => {
       renderPage()
 
       await screen.findByText('Alice')
-      await userEvent.click(screen.getAllByRole('button', { name: /delete/i })[0])
+      await userEvent.click(screen.getAllByRole('button', { name: /^delete$/i })[0])
+
+      const dialog = screen.getByRole('alertdialog')
+      await userEvent.click(within(dialog).getByRole('button', { name: /^delete$/i }))
 
       await waitFor(() => expect(screen.queryByText('Alice')).not.toBeInTheDocument())
       expect(api.delete).toHaveBeenCalledWith('/api/users/agent-1')

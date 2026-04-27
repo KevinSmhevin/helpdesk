@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { authClient } from './lib/auth-client'
+import { Role } from '@helpdesk/core'
 import { Skeleton } from '@/components/ui/skeleton'
 import Layout from './components/Layout'
 import HomePage from './pages/HomePage'
@@ -36,7 +37,7 @@ function AdminRoute() {
   const { data: session, isPending } = authClient.useSession()
   if (isPending) return <PageSkeleton />
   if (!session) return <Navigate to="/login" replace />
-  if ((session.user as { role?: string }).role !== 'admin') return <Navigate to="/" replace />
+  if ((session.user as { role?: Role }).role !== Role.admin) return <Navigate to="/" replace />
   return <Outlet />
 }
 

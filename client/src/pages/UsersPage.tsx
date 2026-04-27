@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import api from '@/lib/api'
+import type { RoleType } from '@helpdesk/core'
 import AddAgentForm from './AddAgentForm'
 import UsersTable from './UsersTable'
 
@@ -7,7 +8,7 @@ export type User = {
   id: string
   name: string
   email: string
-  role: 'admin' | 'agent'
+  role: RoleType
   createdAt: string
 }
 

@@ -1,8 +1,9 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi, beforeEach, describe, it, expect } from 'vitest'
 import type { AxiosResponse } from 'axios'
+import { Role } from '@helpdesk/core'
 import UsersTable from './UsersTable'
 import { authClient } from '@/lib/auth-client'
 import api from '@/lib/api'
@@ -20,7 +21,7 @@ const ADMIN: User = {
   id: 'admin-1',
   name: 'Alice',
   email: 'alice@example.com',
-  role: 'admin',
+  role: Role.admin,
   createdAt: '2024-01-01T00:00:00Z',
 }
 
@@ -28,7 +29,7 @@ const AGENT: User = {
   id: 'agent-1',
   name: 'Bob',
   email: 'bob@example.com',
-  role: 'agent',
+  role: Role.agent,
   createdAt: '2024-02-01T00:00:00Z',
 }
 
@@ -45,6 +46,15 @@ function renderTable(props: { users: User[]; isLoading: boolean; isError: boolea
       <UsersTable {...props} />
     </QueryClientProvider>
   )
+}
+
+async function clickDeleteRow() {
+  await userEvent.click(screen.getByRole('button', { name: /^delete$/i }))
+}
+
+async function confirmDeleteDialog() {
+  const dialog = screen.getByRole('alertdialog')
+  await userEvent.click(within(dialog).getByRole('button', { name: /^delete$/i }))
 }
 
 beforeEach(() => {
@@ -119,28 +129,48 @@ describe('UsersTable', () => {
   })
 
   describe('access control', () => {
-    it('hides the delete button for the logged-in user', () => {
-      mockSession(ADMIN.id)
+    it('hides the delete button for admin users', () => {
       renderTable({ users: [ADMIN, AGENT], isLoading: false, isError: false })
 
-      const deleteButtons = screen.getAllByRole('button', { name: /delete/i })
+      const deleteButtons = screen.getAllByRole('button', { name: /^delete$/i })
       expect(deleteButtons).toHaveLength(1)
     })
 
-    it('shows a delete button for every other user', () => {
-      mockSession(ADMIN.id)
+    it('shows a delete button for agent users', () => {
       renderTable({ users: [ADMIN, AGENT], isLoading: false, isError: false })
 
-      expect(screen.getByRole('button', { name: /delete/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /^delete$/i })).toBeInTheDocument()
+    })
+  })
+
+  describe('confirmation dialog', () => {
+    it('shows a confirmation dialog with the user name when delete is clicked', async () => {
+      renderTable({ users: [ADMIN, AGENT], isLoading: false, isError: false })
+
+      await clickDeleteRow()
+
+      expect(screen.getByRole('alertdialog')).toBeInTheDocument()
+      expect(screen.getByText(`Delete ${AGENT.name}?`)).toBeInTheDocument()
+    })
+
+    it('closes the dialog without deleting when cancel is clicked', async () => {
+      renderTable({ users: [ADMIN, AGENT], isLoading: false, isError: false })
+
+      await clickDeleteRow()
+      await userEvent.click(screen.getByRole('button', { name: /cancel/i }))
+
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+      expect(api.delete).not.toHaveBeenCalled()
     })
   })
 
   describe('delete mutation', () => {
-    it('calls the API with the correct user id', async () => {
+    it('calls the API with the correct user id after confirmation', async () => {
       vi.mocked(api.delete).mockResolvedValue({} as AxiosResponse)
       renderTable({ users: [ADMIN, AGENT], isLoading: false, isError: false })
 
-      await userEvent.click(screen.getByRole('button', { name: /delete/i }))
+      await clickDeleteRow()
+      await confirmDeleteDialog()
 
       expect(api.delete).toHaveBeenCalledWith(`/api/users/${AGENT.id}`)
     })
@@ -156,7 +186,8 @@ describe('UsersTable', () => {
         </QueryClientProvider>
       )
 
-      await userEvent.click(screen.getByRole('button', { name: /delete/i }))
+      await clickDeleteRow()
+      await confirmDeleteDialog()
 
       await waitFor(() => {
         expect(queryClient.getQueryData<User[]>(['users'])).toEqual([ADMIN])
@@ -167,7 +198,8 @@ describe('UsersTable', () => {
       vi.mocked(api.delete).mockReturnValue(new Promise(() => {}) as ReturnType<typeof api.delete>)
       renderTable({ users: [ADMIN, AGENT], isLoading: false, isError: false })
 
-      await userEvent.click(screen.getByRole('button', { name: /delete/i }))
+      await clickDeleteRow()
+      await confirmDeleteDialog()
 
       expect(screen.getByRole('button', { name: /deleting/i })).toBeDisabled()
     })

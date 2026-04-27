@@ -1,10 +1,11 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { authClient } from '../lib/auth-client'
+import { Role } from '@helpdesk/core'
 
 export default function NavBar() {
   const { data: session } = authClient.useSession()
   const navigate = useNavigate()
-  const isAdmin = (session?.user as { role?: string } | undefined)?.role === 'admin'
+  const isAdmin = (session?.user as { role?: Role } | undefined)?.role === Role.admin
 
   const handleSignOut = async () => {
     await authClient.signOut()
