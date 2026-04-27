@@ -1,8 +1,11 @@
+import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { Pencil } from 'lucide-react'
 import { authClient } from '@/lib/auth-client'
 import api from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import EditUserDialog from './EditUserDialog'
 import type { User } from './UsersPage'
 
 type Props = {
@@ -14,6 +17,7 @@ type Props = {
 export default function UsersTable({ users, isLoading, isError }: Props) {
   const { data: session } = authClient.useSession()
   const queryClient = useQueryClient()
+  const [editingUser, setEditingUser] = useState<User | null>(null)
 
   const deleteUser = useMutation({
     mutationFn: (id: string) => api.delete(`/api/users/${id}`),
@@ -60,6 +64,7 @@ export default function UsersTable({ users, isLoading, isError }: Props) {
   }
 
   return (
+    <>
     <div className="border border-border rounded-xl overflow-hidden">
       <table className="w-full text-sm">
         <thead className="bg-muted text-muted-foreground">
@@ -91,23 +96,35 @@ export default function UsersTable({ users, isLoading, isError }: Props) {
                 {new Date(user.createdAt).toLocaleDateString()}
               </td>
               <td className="px-4 py-3 text-right">
-                {user.id !== session?.user.id && (
+                <div className="flex items-center justify-end gap-2">
                   <Button
-                    variant="destructive"
+                    variant="ghost"
                     size="xs"
-                    disabled={deleteUser.isPending && deleteUser.variables === user.id}
-                    onClick={() => deleteUser.mutate(user.id)}
+                    onClick={() => setEditingUser(user)}
+                    aria-label={`Edit ${user.name}`}
                   >
-                    {deleteUser.isPending && deleteUser.variables === user.id
-                      ? 'Deleting…'
-                      : 'Delete'}
+                    <Pencil className="size-3.5" />
                   </Button>
-                )}
+                  {user.id !== session?.user.id && (
+                    <Button
+                      variant="destructive"
+                      size="xs"
+                      disabled={deleteUser.isPending && deleteUser.variables === user.id}
+                      onClick={() => deleteUser.mutate(user.id)}
+                    >
+                      {deleteUser.isPending && deleteUser.variables === user.id
+                        ? 'Deleting…'
+                        : 'Delete'}
+                    </Button>
+                  )}
+                </div>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
+    <EditUserDialog user={editingUser} onClose={() => setEditingUser(null)} />
+    </>
   )
 }

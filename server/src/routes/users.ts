@@ -3,7 +3,7 @@ import { hashPassword } from 'better-auth/crypto'
 import { Role } from '@prisma/client'
 import { requireAdmin } from '../lib/middleware.ts'
 import prisma from '../lib/prisma.ts'
-import { CreateUserSchema } from '@helpdesk/core'
+import { CreateUserSchema, UpdateUserSchema } from '@helpdesk/core'
 
 const router = Router()
 
@@ -61,6 +61,44 @@ router.post('/', async (req, res) => {
   })
 
   res.status(201).json(user)
+})
+
+router.put('/:id', async (req, res) => {
+  const result = UpdateUserSchema.safeParse(req.body)
+  if (!result.success) {
+    return void res.status(400).json({ error: result.error.issues[0].message })
+  }
+
+  const { name, email, password } = result.data
+  const { id } = req.params
+
+  const user = await prisma.user.findUnique({ where: { id } })
+  if (!user) {
+    return void res.status(404).json({ error: Errors.USER_NOT_FOUND })
+  }
+
+  if (email !== user.email) {
+    const existing = await prisma.user.findUnique({ where: { email } })
+    if (existing) {
+      return void res.status(409).json({ error: Errors.EMAIL_TAKEN })
+    }
+  }
+
+  const updated = await prisma.user.update({
+    where: { id },
+    data: { name, email },
+    select: { id: true, name: true, email: true, role: true, createdAt: true },
+  })
+
+  if (password) {
+    const hashed = await hashPassword(password)
+    await prisma.account.updateMany({
+      where: { userId: id, providerId: CREDENTIAL_PROVIDER_ID },
+      data: { password: hashed },
+    })
+  }
+
+  res.json(updated)
 })
 
 router.delete('/:id', async (req, res) => {
