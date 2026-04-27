@@ -34,7 +34,9 @@ const authLimiter = rateLimit({
   message: { error: 'Too many requests, please try again later' },
 })
 
-app.use('/api/auth/sign-in', authLimiter)
+if (process.env.NODE_ENV !== 'test') {
+  app.use('/api/auth/sign-in', authLimiter)
+}
 app.all('/api/auth/*', toNodeHandler(auth))
 
 app.get('/api/health', (_req, res) => {

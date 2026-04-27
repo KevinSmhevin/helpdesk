@@ -208,6 +208,9 @@ test.describe('Update — edit user dialog', () => {
     await page.getByRole('button', { name: `Edit ${name}`, exact: true }).click()
 
     const dialog = page.getByRole('dialog')
+    // Wait for the useEffect to populate the form before filling the password field.
+    // Without this, form.reset({ password: '' }) can run after fill() and clear it.
+    await expect(dialog.getByLabel('Name')).toHaveValue(name)
     await dialog.getByLabel('New password').fill(newPassword)
     await dialog.getByRole('button', { name: 'Save changes' }).click()
     await expect(dialog).not.toBeVisible()
@@ -232,11 +235,15 @@ test.describe('Delete — soft delete agent', () => {
 
     await createAgent(page, name, email)
 
-    const row = page.getByRole('row', { name: new RegExp(email, 'i') })
-    await row.getByRole('button', { name: 'Delete' }).click()
+    // Use filter({ hasText }) instead of RegExp — the email contains '+' which is a
+    // regex quantifier and would silently break new RegExp(email, 'i').
+    const row = page.locator('tr').filter({ hasText: email })
+    // exact: true prevents matching the Edit button whose aria-label "Edit Delete Me…"
+    // also contains the word "Delete".
+    await row.getByRole('button', { name: 'Delete', exact: true }).click()
 
     const alertDialog = page.getByRole('alertdialog')
-    await alertDialog.getByRole('button', { name: 'Delete' }).click()
+    await alertDialog.getByRole('button', { name: 'Delete', exact: true }).click()
 
     await expect(row).not.toBeVisible()
   })
@@ -249,11 +256,11 @@ test.describe('Delete — soft delete agent', () => {
 
     await createAgent(page, name, email)
 
-    const row = page.getByRole('row', { name: new RegExp(email, 'i') })
-    await row.getByRole('button', { name: 'Delete' }).click()
+    const row = page.locator('tr').filter({ hasText: email })
+    await row.getByRole('button', { name: 'Delete', exact: true }).click()
 
     const alertDialog = page.getByRole('alertdialog')
-    await alertDialog.getByRole('button', { name: 'Delete' }).click()
+    await alertDialog.getByRole('button', { name: 'Delete', exact: true }).click()
     await expect(row).not.toBeVisible()
 
     await page.reload()
