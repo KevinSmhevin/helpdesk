@@ -151,11 +151,11 @@ describe('TicketsPage', () => {
       ).toBeInTheDocument()
     })
 
-    it('calls GET /api/tickets', async () => {
+    it('calls GET /api/tickets with default sort params', async () => {
       renderPage()
 
       await screen.findByText('Cannot log in to my account')
-      expect(api.get).toHaveBeenCalledWith('/api/tickets')
+      expect(api.get).toHaveBeenCalledWith('/api/tickets?sortBy=createdAt&sortOrder=desc')
     })
   })
 })
