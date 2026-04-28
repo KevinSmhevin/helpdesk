@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import {
   useReactTable,
@@ -7,10 +7,19 @@ import {
   flexRender,
 } from '@tanstack/react-table'
 import type { SortingState } from '@tanstack/react-table'
-import { ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react'
+import { ArrowUp, ArrowDown, ArrowUpDown, Search, X } from 'lucide-react'
 import api from '@/lib/api'
-import { TicketStatus, TicketCategory, TicketCategoryLabels } from '@helpdesk/core'
+import { TicketStatus, TicketCategory, TicketCategoryLabels, TicketSortColumn, SortOrder } from '@helpdesk/core'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -94,16 +103,33 @@ const columns = [
 ]
 
 export default function TicketsPage() {
-  const [sorting, setSorting] = useState<SortingState>([{ id: 'createdAt', desc: true }])
+  const [sorting, setSorting] = useState<SortingState>([{ id: TicketSortColumn.createdAt, desc: true }])
+  const [searchInput, setSearchInput] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [status, setStatus] = useState<TicketStatus | 'all'>('all')
+  const [category, setCategory] = useState<TicketCategory | 'all'>('all')
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchInput), 300)
+    return () => clearTimeout(timer)
+  }, [searchInput])
+
+  const hasActiveFilters = debouncedSearch !== '' || status !== 'all' || category !== 'all'
 
   const { data: tickets = [], isLoading, isError } = useQuery<Ticket[]>({
-    queryKey: ['tickets', sorting],
+    queryKey: ['tickets', sorting, status, category, debouncedSearch],
     queryFn: async () => {
+      const params = new URLSearchParams()
       const sort = sorting[0]
-      const params = sort
-        ? `?sortBy=${sort.id}&sortOrder=${sort.desc ? 'desc' : 'asc'}`
-        : ''
-      const res = await api.get<Ticket[]>(`/api/tickets${params}`)
+      if (sort) {
+        params.set('sortBy', sort.id)
+        params.set('sortOrder', sort.desc ? SortOrder.desc : SortOrder.asc)
+      }
+      if (status !== 'all') params.set('status', status)
+      if (category !== 'all') params.set('category', category)
+      if (debouncedSearch) params.set('search', debouncedSearch)
+      const qs = params.toString()
+      const res = await api.get<Ticket[]>(`/api/tickets${qs ? `?${qs}` : ''}`)
       return res.data
     },
     placeholderData: keepPreviousData,
@@ -119,15 +145,78 @@ export default function TicketsPage() {
     getCoreRowModel: getCoreRowModel(),
   })
 
+  function clearFilters() {
+    setSearchInput('')
+    setStatus('all')
+    setCategory('all')
+  }
+
   return (
     <div className="max-w-5xl mx-auto px-6 py-8 space-y-6">
       <h1 className="text-2xl font-semibold text-foreground">Tickets</h1>
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <Input
+            placeholder="Search tickets…"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            className="pl-9 w-64"
+          />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Select value={status} onValueChange={(v) => setStatus(v as TicketStatus | 'all')}>
+            <SelectTrigger className="w-36">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value={TicketStatus.open}>Open</SelectItem>
+              <SelectItem value={TicketStatus.resolved}>Resolved</SelectItem>
+              <SelectItem value={TicketStatus.closed}>Closed</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={category}
+            onValueChange={(v) => setCategory(v as TicketCategory | 'all')}
+          >
+            <SelectTrigger className="w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All categories</SelectItem>
+              <SelectItem value={TicketCategory.general_question}>
+                {TicketCategoryLabels[TicketCategory.general_question]}
+              </SelectItem>
+              <SelectItem value={TicketCategory.technical_question}>
+                {TicketCategoryLabels[TicketCategory.technical_question]}
+              </SelectItem>
+              <SelectItem value={TicketCategory.refund_request}>
+                {TicketCategoryLabels[TicketCategory.refund_request]}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+
+          {hasActiveFilters && (
+            <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1">
+              <X className="h-3.5 w-3.5" />
+              Clear
+            </Button>
+          )}
+        </div>
+      </div>
+
       {isLoading ? (
         <TicketsTableSkeleton />
       ) : isError ? (
         <p className="text-sm text-destructive">Could not load tickets. Please try again.</p>
       ) : tickets.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No tickets yet.</p>
+        <p className="text-sm text-muted-foreground">
+          {hasActiveFilters ? 'No tickets match your filters.' : 'No tickets yet.'}
+        </p>
       ) : (
         <div className="border border-border rounded-xl overflow-hidden">
           <Table>

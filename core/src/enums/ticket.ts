@@ -9,3 +9,11 @@ export enum TicketCategory {
   technical_question = 'technical_question',
   refund_request = 'refund_request',
 }
+
+export enum TicketSortColumn {
+  subject = 'subject',
+  fromEmail = 'fromEmail',
+  status = 'status',
+  category = 'category',
+  createdAt = 'createdAt',
+}

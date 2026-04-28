@@ -85,6 +85,25 @@ describe('TicketsPage', () => {
     })
   })
 
+  describe('filter bar', () => {
+    beforeEach(() => mockGetTickets())
+
+    it('renders search input and two filter selects', async () => {
+      renderPage()
+
+      expect(screen.getByPlaceholderText('Search tickets…')).toBeInTheDocument()
+      // shadcn Select triggers render as comboboxes — one for status, one for category
+      expect(screen.getAllByRole('combobox')).toHaveLength(2)
+    })
+
+    it('does not show Clear button before any filter is applied', async () => {
+      renderPage()
+
+      await screen.findByText('Cannot log in to my account')
+      expect(screen.queryByRole('button', { name: /clear/i })).not.toBeInTheDocument()
+    })
+  })
+
   describe('ticket list', () => {
     beforeEach(() => mockGetTickets())
 
@@ -112,7 +131,6 @@ describe('TicketsPage', () => {
       renderPage()
 
       await screen.findByText('bob@example.com')
-      // "Bob" never appears in the DOM since fromName is null
       expect(screen.queryByText('Bob')).not.toBeInTheDocument()
     })
 
