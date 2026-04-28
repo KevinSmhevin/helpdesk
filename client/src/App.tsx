@@ -5,6 +5,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import Layout from './components/Layout'
 import HomePage from './pages/HomePage'
 import LoginPage from './pages/LoginPage'
+import TicketsPage from './pages/TicketsPage'
 import UsersPage from './pages/UsersPage'
 
 function PageSkeleton() {
@@ -49,6 +50,7 @@ function App() {
         <Route element={<ProtectedRoute />}>
           <Route element={<Layout />}>
             <Route path="/" element={<HomePage />} />
+            <Route path="/tickets" element={<TicketsPage />} />
           </Route>
         </Route>
         <Route element={<AdminRoute />}>

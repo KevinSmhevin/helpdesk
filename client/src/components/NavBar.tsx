@@ -18,6 +18,9 @@ export default function NavBar() {
         <Link to="/" className="font-semibold text-foreground hover:text-foreground/80 transition-colors">
           Helpdesk
         </Link>
+        <Link to="/tickets" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+          Tickets
+        </Link>
         {isAdmin && (
           <Link to="/users" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
             Users

@@ -1,10 +1,17 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Pencil } from 'lucide-react'
-import { authClient } from '@/lib/auth-client'
 import api from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,8 +32,9 @@ type Props = {
   isError: boolean
 }
 
+const COLUMNS = ['Name', 'Email', 'Role', 'Created', '']
+
 export default function UsersTable({ users, isLoading, isError }: Props) {
-  const { data: session } = authClient.useSession()
   const queryClient = useQueryClient()
   const [editingUser, setEditingUser] = useState<User | null>(null)
   const [deletingUser, setDeletingUser] = useState<User | null>(null)
@@ -41,28 +49,26 @@ export default function UsersTable({ users, isLoading, isError }: Props) {
   if (isLoading) {
     return (
       <div className="border border-border rounded-xl overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-muted text-muted-foreground">
-            <tr>
-              <th className="px-4 py-3 text-left font-medium">Name</th>
-              <th className="px-4 py-3 text-left font-medium">Email</th>
-              <th className="px-4 py-3 text-left font-medium">Role</th>
-              <th className="px-4 py-3 text-left font-medium">Created</th>
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border bg-background">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              {COLUMNS.map((col) => (
+                <TableHead key={col} className="px-4">{col}</TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {Array.from({ length: 4 }).map((_, i) => (
-              <tr key={i}>
-                <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
-                <td className="px-4 py-3"><Skeleton className="h-4 w-40" /></td>
-                <td className="px-4 py-3"><Skeleton className="h-5 w-12 rounded-full" /></td>
-                <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
-                <td className="px-4 py-3" />
-              </tr>
+              <TableRow key={i}>
+                <TableCell className="px-4"><Skeleton className="h-4 w-28" /></TableCell>
+                <TableCell className="px-4"><Skeleton className="h-4 w-40" /></TableCell>
+                <TableCell className="px-4"><Skeleton className="h-5 w-12 rounded-full" /></TableCell>
+                <TableCell className="px-4"><Skeleton className="h-4 w-20" /></TableCell>
+                <TableCell className="px-4" />
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
     )
   }
@@ -78,22 +84,20 @@ export default function UsersTable({ users, isLoading, isError }: Props) {
   return (
     <>
       <div className="border border-border rounded-xl overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-muted text-muted-foreground">
-            <tr>
-              <th className="px-4 py-3 text-left font-medium">Name</th>
-              <th className="px-4 py-3 text-left font-medium">Email</th>
-              <th className="px-4 py-3 text-left font-medium">Role</th>
-              <th className="px-4 py-3 text-left font-medium">Created</th>
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border bg-background">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              {COLUMNS.map((col) => (
+                <TableHead key={col} className="px-4">{col}</TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {users.map((user) => (
-              <tr key={user.id}>
-                <td className="px-4 py-3 font-medium text-foreground">{user.name}</td>
-                <td className="px-4 py-3 text-muted-foreground">{user.email}</td>
-                <td className="px-4 py-3">
+              <TableRow key={user.id}>
+                <TableCell className="px-4 font-medium text-foreground">{user.name}</TableCell>
+                <TableCell className="px-4 text-muted-foreground">{user.email}</TableCell>
+                <TableCell className="px-4">
                   <span
                     className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                       user.role === Role.admin
@@ -103,11 +107,11 @@ export default function UsersTable({ users, isLoading, isError }: Props) {
                   >
                     {user.role}
                   </span>
-                </td>
-                <td className="px-4 py-3 text-muted-foreground">
+                </TableCell>
+                <TableCell className="px-4 text-muted-foreground">
                   {new Date(user.createdAt).toLocaleDateString()}
-                </td>
-                <td className="px-4 py-3 text-right">
+                </TableCell>
+                <TableCell className="px-4 text-right">
                   <div className="flex items-center justify-end gap-2">
                     <Button
                       variant="ghost"
@@ -130,11 +134,11 @@ export default function UsersTable({ users, isLoading, isError }: Props) {
                       </Button>
                     )}
                   </div>
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
 
       <EditUserDialog user={editingUser} onClose={() => setEditingUser(null)} />

@@ -26,8 +26,12 @@ Use Context7 MCP (`resolve-library-id` → `query-docs`) to fetch up-to-date doc
 helpdesk/
 ├── core/
 │   └── src/
+│       ├── enums/
+│       │   ├── role.ts             # Role enum (admin | agent)
+│       │   └── ticket.ts           # TicketStatus + TicketCategory enums
 │       ├── schemas/
-│       │   └── user.ts             # Shared Zod schemas + inferred types
+│       │   ├── user.ts             # Shared Zod schemas + inferred types
+│       │   └── ticket.ts           # SendGridWebhookSchema + TicketCategoryLabels
 │       └── index.ts                # Re-exports
 ├── e2e/
 │   ├── tests/                      # Playwright test files go here
@@ -43,12 +47,13 @@ helpdesk/
 │       ├── test/
 │       │   └── setup.ts            # Vitest setup — imports @testing-library/jest-dom
 │       ├── components/
-│       │   ├── ui/                 # shadcn components (button, input, label, card, …)
+│       │   ├── ui/                 # shadcn components (button, input, label, card, table, …)
 │       │   ├── Layout.tsx          # NavBar + <Outlet />
-│       │   └── NavBar.tsx          # User name + sign out
+│       │   └── NavBar.tsx          # Nav links + sign out
 │       ├── pages/
 │       │   ├── LoginPage.tsx
 │       │   ├── HomePage.tsx
+│       │   ├── TicketsPage.tsx     # All authenticated users: /tickets
 │       │   └── UsersPage.tsx       # Admin-only: /users
 │       └── App.tsx                 # Routes + ProtectedRoute + AdminRoute
 └── server/
@@ -58,7 +63,9 @@ helpdesk/
     │   │   ├── middleware.ts       # requireAuth / requireAdmin Express middleware
     │   │   └── prisma.ts           # Prisma client singleton
     │   ├── routes/
-    │   │   └── users.ts            # User management routes (GET /api/users, POST, DELETE)
+    │   │   ├── tickets.ts          # GET /api/tickets (requireAuth)
+    │   │   ├── users.ts            # User management routes (GET /api/users, POST, PUT, DELETE)
+    │   │   └── webhooks.ts         # POST /api/webhooks/email — SendGrid inbound parse
     │   └── index.ts                # Express app entry point — mounts routers
     └── prisma/
         ├── schema.prisma
@@ -106,6 +113,7 @@ Required vars:
 | `ALLOWED_ORIGINS` | Comma-separated list of allowed CORS origins (e.g. `http://localhost:5173,https://app.example.com`) |
 | `ANTHROPIC_API_KEY` | Anthropic API key |
 | `SENDGRID_API_KEY` | SendGrid API key |
+| `SENDGRID_WEBHOOK_SECRET` | Token appended to the inbound parse URL as `?token=` (generate with `openssl rand -hex 32`) |
 | `SEED_ADMIN_EMAIL` | Email for the seeded admin user |
 | `SEED_ADMIN_PASSWORD` | Password for the seeded admin user |
 
@@ -237,11 +245,40 @@ const mutation = useMutation({
 
 ## UI Components (shadcn/ui)
 
-- **Installed:** shadcn/ui with the default theme (style: default, base color: zinc, CSS variables enabled)
+- **Installed:** shadcn/ui with the default theme (style: default, base color: zinc, CSS variables enabled). Currently installed components: `alert-dialog`, `button`, `card`, `dialog`, `input`, `label`, `skeleton`, `table`
 - **Adding components:** `bunx shadcn@latest add <component>` from the `client/` directory
 - **Import alias:** `@` resolves to `client/src/` — always use `@/components/ui/...` not relative paths
 - **Theme tokens:** Use semantic CSS variables (`bg-muted`, `text-destructive`, `text-foreground`, etc.) rather than hardcoded Tailwind colors so the theme stays consistent
 - **Tailwind v4:** Configured via `@tailwindcss/vite` plugin — no `tailwind.config.js` file; theme is defined in `src/index.css`
+- **Tables:** Always use shadcn `Table`, `TableHeader`, `TableRow`, `TableHead`, `TableBody`, `TableCell` from `@/components/ui/table` — never use native `<table>`, `<thead>`, `<tr>`, `<th>`, `<td>` elements directly
+
+## Testing philosophy
+
+**Default to unit/component tests. Use E2E only when a real browser, real server, or real database is essential to the assertion.**
+
+The cost of an E2E test is roughly 10–50× a unit test: it needs two servers, a browser, a seeded database, and runs serially. Don't pay that cost for something a unit test can cover more reliably and faster.
+
+### What belongs in unit/component tests
+
+- All rendering logic: loading states, error states, empty states, conditional UI
+- Data display: how a field is formatted, which label text appears, badges, dates
+- Form behaviour: validation errors, submit flow, cache updates on success
+- Access control within a component: buttons hidden/shown based on session role
+- API call correctness: the right endpoint and payload were passed
+
+If the assertion only requires rendering the component with mocked API responses, it's a unit test.
+
+### What belongs in E2E tests
+
+Only write an E2E test when the scenario **cannot be meaningfully verified without** a real browser, server, or database:
+
+- **Auth and routing** — redirect to `/login` when unauthenticated, role-based route guards (`ProtectedRoute`, `AdminRoute`)
+- **Full-stack data pipeline** — data created through one real system (e.g. webhook) actually appears in the browser via another real system (real DB → real API → real browser render)
+- **Cross-system ordering/consistency** — e.g. `ORDER BY` on the real DB produces the correct row order in the UI
+- **Nav and layout wiring** — links present in the real app shell, not a mocked component tree
+- **Webhook and external integrations** — endpoints that accept multipart or non-JSON payloads from external services
+
+Do **not** duplicate rendering-detail assertions in E2E that are already covered by unit tests (e.g. "the status badge says 'open'", "the em-dash shows for null category"). E2E tests for data should assert the subject/identifier appears — proving data flowed through — not re-verify how the component renders it.
 
 ## Unit / Component Testing
 
@@ -284,18 +321,18 @@ Co-locate tests with their component: `src/pages/Foo.tsx` → `src/pages/Foo.tes
 
 ## E2E Testing
 
-After implementing a feature or page, use the **`playwright-e2e-writer` agent** to write Playwright tests for it. Do not write E2E tests yourself — always delegate to this agent.
+Use the **`playwright-e2e-writer` agent** to write Playwright tests. Do not write E2E tests yourself — always delegate to this agent.
 
 **When to invoke it:**
-- After building a new page or user flow
-- After adding or changing auth/authorization behavior
-- After modifying form interactions or UI state
+- After adding auth/authorization behaviour (route guards, role checks)
+- After building a feature whose correctness depends on a real server or database (e.g. data created via webhook appears in the UI)
+- After wiring navigation or cross-page flows
 
-**How to invoke it:** describe the feature that was just built and ask for tests. Example:
+**When NOT to invoke it:**
+- For rendering details already covered by unit tests (loading states, field formatting, conditional UI)
+- For API call correctness (use unit tests with mocked axios)
 
-> "I just built the ticket list page with filtering and status updates. Write E2E tests for it."
-
-The agent knows the test infrastructure (ports, seeded users, file locations) and Playwright best practices. Tests go in `e2e/tests/<feature>.spec.ts`.
+**How to invoke it:** describe the feature and explicitly state which concerns need E2E coverage vs. what is already covered by unit tests. Tests go in `e2e/tests/<feature>.spec.ts`.
 
 ## Best Practices
 
