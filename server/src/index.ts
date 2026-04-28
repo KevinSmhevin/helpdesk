@@ -7,9 +7,14 @@ import { toNodeHandler } from 'better-auth/node'
 import { auth } from './lib/auth.ts'
 import prisma from './lib/prisma.ts'
 import usersRouter from './routes/users.ts'
+import webhooksRouter from './routes/webhooks.ts'
 
 if (!process.env.BETTER_AUTH_SECRET || process.env.BETTER_AUTH_SECRET === 'change-me') {
   throw new Error('BETTER_AUTH_SECRET must be set to a strong random value (openssl rand -base64 32)')
+}
+
+if (!process.env.SENDGRID_WEBHOOK_SECRET) {
+  throw new Error('SENDGRID_WEBHOOK_SECRET must be set')
 }
 
 const app = express()
@@ -44,6 +49,16 @@ app.get('/api/health', (_req, res) => {
 })
 
 app.use('/api/users', usersRouter)
+app.use('/api/webhooks', webhooksRouter)
+
+app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  const code = (err as { code?: string })?.code
+  if (code === 'P2002') {
+    return void res.status(200).json({ ok: true })
+  }
+  console.error(err)
+  res.status(500).json({ error: 'Internal server error' })
+})
 
 async function start() {
   await prisma.$connect()

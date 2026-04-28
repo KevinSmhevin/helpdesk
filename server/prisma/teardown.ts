@@ -2,6 +2,7 @@ import 'dotenv/config'
 import prisma from '../src/lib/prisma.ts'
 
 async function main() {
+  await prisma.$executeRaw`TRUNCATE TABLE "ticket" CASCADE`
   await prisma.$executeRaw`TRUNCATE TABLE "verification" CASCADE`
   await prisma.$executeRaw`TRUNCATE TABLE "account" CASCADE`
   await prisma.$executeRaw`TRUNCATE TABLE "session" CASCADE`
