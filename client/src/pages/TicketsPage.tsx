@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import {
   useReactTable,
@@ -10,6 +11,7 @@ import type { SortingState } from '@tanstack/react-table'
 import { ArrowUp, ArrowDown, ArrowUpDown, Search, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import api from '@/lib/api'
 import { TicketStatus, TicketCategory, TicketCategoryLabels, TicketSortColumn, SortOrder } from '@helpdesk/core'
+import { statusStyles } from '@/lib/ticket'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -47,21 +49,18 @@ type TicketsResponse = {
   totalPages: number
 }
 
-const statusStyles: Record<TicketStatus, string> = {
-  [TicketStatus.open]: 'bg-primary/10 text-primary',
-  [TicketStatus.resolved]: 'bg-green-100 text-green-700',
-  [TicketStatus.closed]: 'bg-muted text-muted-foreground',
-}
-
 const columnHelper = createColumnHelper<Ticket>()
 
 const columns = [
   columnHelper.accessor('subject', {
     header: 'Subject',
     cell: (info) => (
-      <span className="font-medium text-foreground max-w-xs truncate block">
+      <Link
+        to={`/tickets/${info.row.original.id}`}
+        className="text-foreground max-w-xs truncate block hover:text-primary hover:underline"
+      >
         {info.getValue()}
-      </span>
+      </Link>
     ),
   }),
   columnHelper.accessor('fromEmail', {

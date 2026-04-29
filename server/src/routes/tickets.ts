@@ -71,4 +71,17 @@ router.get('/', async (req, res) => {
   res.json({ tickets, total, page, pageSize, totalPages: Math.ceil(total / pageSize) })
 })
 
+router.get('/:id', async (req, res) => {
+  const ticket = await prisma.ticket.findUnique({
+    where: { id: req.params.id },
+  })
+
+  if (!ticket) {
+    res.status(404).json({ error: 'Ticket not found' })
+    return
+  }
+
+  res.json(ticket)
+})
+
 export default router
