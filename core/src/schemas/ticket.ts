@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { TicketCategory } from '../enums/ticket.ts'
+import { TicketCategory, TicketStatus } from '../enums/ticket.ts'
 
 export const TicketCategoryLabels: Record<TicketCategory, string> = {
   [TicketCategory.general_question]: 'General Question',
@@ -17,8 +17,10 @@ export const SendGridWebhookSchema = z.object({
 
 export type SendGridWebhookInput = z.infer<typeof SendGridWebhookSchema>
 
-export const AssignTicketSchema = z.object({
-  assignedToId: z.string().nullable(),
+export const UpdateTicketSchema = z.object({
+  assignedToId: z.string().nullable().optional(),
+  status: z.enum(TicketStatus).optional(),
+  category: z.enum(TicketCategory).nullable().optional(),
 })
 
-export type AssignTicketInput = z.infer<typeof AssignTicketSchema>
+export type UpdateTicketInput = z.infer<typeof UpdateTicketSchema>

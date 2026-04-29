@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import type { Prisma } from '@prisma/client'
-import { TicketSortColumn, SortOrder, AssignTicketSchema } from '@helpdesk/core'
+import { TicketSortColumn, SortOrder, UpdateTicketSchema } from '@helpdesk/core'
 import { requireAuth } from '../lib/middleware.ts'
 import prisma from '../lib/prisma.ts'
 
@@ -98,13 +98,13 @@ router.get('/:id', async (req, res) => {
 })
 
 router.patch('/:id', async (req, res) => {
-  const result = AssignTicketSchema.safeParse(req.body)
+  const result = UpdateTicketSchema.safeParse(req.body)
   if (!result.success) {
     res.status(400).json({ error: result.error.issues[0].message })
     return
   }
 
-  const { assignedToId } = result.data
+  const { assignedToId, status, category } = result.data
 
   const ticket = await prisma.ticket.findUnique({ where: { id: req.params.id } })
   if (!ticket) {
@@ -112,7 +112,7 @@ router.patch('/:id', async (req, res) => {
     return
   }
 
-  if (assignedToId !== null) {
+  if (assignedToId !== undefined && assignedToId !== null) {
     const agent = await prisma.user.findUnique({ where: { id: assignedToId, deletedAt: null } })
     if (!agent) {
       res.status(422).json({ error: Errors.AGENT_NOT_FOUND })
@@ -122,7 +122,11 @@ router.patch('/:id', async (req, res) => {
 
   const updated = await prisma.ticket.update({
     where: { id: req.params.id },
-    data: { assignedToId },
+    data: {
+      ...(assignedToId !== undefined && { assignedToId }),
+      ...(status !== undefined && { status }),
+      ...(category !== undefined && { category }),
+    },
     include: { assignedTo: { select: assignedToSelect } },
   })
 

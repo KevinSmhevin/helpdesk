@@ -48,7 +48,7 @@ const AGENTS = [
   { id: 'agent-2', name: 'Carol Agent', email: 'carol@example.com' },
 ]
 
-type TicketDetail = {
+type TicketFixture = {
   id: string
   subject: string
   body: string
@@ -64,7 +64,7 @@ type TicketDetail = {
   updatedAt: string
 }
 
-const TICKET: TicketDetail = {
+const TICKET: TicketFixture = {
   id: 'ticket-1',
   subject: 'Cannot log in to my account',
   body: 'I have been unable to log in for two days.',
@@ -80,7 +80,7 @@ const TICKET: TicketDetail = {
   updatedAt: '2024-03-01T10:00:00Z',
 }
 
-function mockGet(ticket = TICKET, agents = AGENTS) {
+function mockGet(ticket: TicketFixture = TICKET, agents = AGENTS) {
   vi.mocked(api.get).mockImplementation((url) => {
     if ((url as string).startsWith('/api/tickets/'))
       return Promise.resolve({ data: ticket } as AxiosResponse)
@@ -99,6 +99,14 @@ function renderPage() {
       </MemoryRouter>
     </QueryClientProvider>
   )
+}
+
+// Find the combobox or options scoped to a specific field label.
+function fieldCombobox(label: string) {
+  return within(screen.getByText(label).closest('div')!).getByRole('combobox')
+}
+function fieldOption(label: string, optionName: string) {
+  return within(screen.getByText(label).closest('div')!).getByRole('option', { name: optionName })
 }
 
 beforeEach(() => {
@@ -133,18 +141,6 @@ describe('TicketDetailPage', () => {
       await screen.findByRole('heading', { name: 'Cannot log in to my account' })
     })
 
-    it('renders the status badge', async () => {
-      renderPage()
-
-      await screen.findByText('open')
-    })
-
-    it('renders the human-readable category label', async () => {
-      renderPage()
-
-      await screen.findByText(TicketCategoryLabels[TicketCategory.technical_question])
-    })
-
     it('renders from name and email', async () => {
       renderPage()
 
@@ -172,13 +168,135 @@ describe('TicketDetailPage', () => {
     })
   })
 
+  describe('status select', () => {
+    beforeEach(() => mockGet())
+
+    it('shows the current status label in the trigger', async () => {
+      renderPage()
+
+      await screen.findByRole('heading', { name: 'Cannot log in to my account' })
+      expect(fieldCombobox('Status')).toHaveTextContent('Open')
+    })
+
+    it('renders all status options', async () => {
+      renderPage()
+
+      await screen.findByRole('heading', { name: 'Cannot log in to my account' })
+      expect(fieldOption('Status', 'Open')).toBeInTheDocument()
+      expect(fieldOption('Status', 'Resolved')).toBeInTheDocument()
+      expect(fieldOption('Status', 'Closed')).toBeInTheDocument()
+    })
+
+    it('calls PATCH with the new status when an option is selected', async () => {
+      vi.mocked(api.patch).mockResolvedValue({ data: { ...TICKET, status: TicketStatus.resolved } } as AxiosResponse)
+      renderPage()
+
+      await screen.findByRole('heading', { name: 'Cannot log in to my account' })
+      await userEvent.click(fieldOption('Status', 'Resolved'))
+
+      await waitFor(() =>
+        expect(api.patch).toHaveBeenCalledWith('/api/tickets/ticket-1', { status: TicketStatus.resolved })
+      )
+    })
+
+    it('updates the trigger label after a successful status change', async () => {
+      vi.mocked(api.patch).mockResolvedValue({ data: { ...TICKET, status: TicketStatus.resolved } } as AxiosResponse)
+      renderPage()
+
+      await screen.findByRole('heading', { name: 'Cannot log in to my account' })
+      await userEvent.click(fieldOption('Status', 'Resolved'))
+
+      await waitFor(() => expect(fieldCombobox('Status')).toHaveTextContent('Resolved'))
+    })
+
+    it('shows an error when the PATCH request fails', async () => {
+      vi.mocked(api.patch).mockRejectedValue(new Error('network error'))
+      renderPage()
+
+      await screen.findByRole('heading', { name: 'Cannot log in to my account' })
+      await userEvent.click(fieldOption('Status', 'Resolved'))
+
+      await screen.findByText('Failed to update status.')
+    })
+  })
+
+  describe('category select', () => {
+    beforeEach(() => mockGet())
+
+    it('shows the current category label in the trigger', async () => {
+      renderPage()
+
+      await screen.findByRole('heading', { name: 'Cannot log in to my account' })
+      expect(fieldCombobox('Category')).toHaveTextContent(
+        TicketCategoryLabels[TicketCategory.technical_question]
+      )
+    })
+
+    it('shows "No Category" in the trigger when category is null', async () => {
+      mockGet({ ...TICKET, category: null })
+      renderPage()
+
+      await screen.findByRole('heading', { name: 'Cannot log in to my account' })
+      expect(fieldCombobox('Category')).toHaveTextContent('No Category')
+    })
+
+    it('renders all category options including No Category', async () => {
+      renderPage()
+
+      await screen.findByRole('heading', { name: 'Cannot log in to my account' })
+      expect(fieldOption('Category', 'No Category')).toBeInTheDocument()
+      expect(fieldOption('Category', TicketCategoryLabels[TicketCategory.general_question])).toBeInTheDocument()
+      expect(fieldOption('Category', TicketCategoryLabels[TicketCategory.technical_question])).toBeInTheDocument()
+      expect(fieldOption('Category', TicketCategoryLabels[TicketCategory.refund_request])).toBeInTheDocument()
+    })
+
+    it('calls PATCH with the new category when an option is selected', async () => {
+      vi.mocked(api.patch).mockResolvedValue({
+        data: { ...TICKET, category: TicketCategory.refund_request },
+      } as AxiosResponse)
+      renderPage()
+
+      await screen.findByRole('heading', { name: 'Cannot log in to my account' })
+      await userEvent.click(fieldOption('Category', TicketCategoryLabels[TicketCategory.refund_request]))
+
+      await waitFor(() =>
+        expect(api.patch).toHaveBeenCalledWith('/api/tickets/ticket-1', {
+          category: TicketCategory.refund_request,
+        })
+      )
+    })
+
+    it('calls PATCH with null when No Category is selected', async () => {
+      mockGet({ ...TICKET, category: TicketCategory.general_question })
+      vi.mocked(api.patch).mockResolvedValue({ data: { ...TICKET, category: null } } as AxiosResponse)
+      renderPage()
+
+      await screen.findByRole('heading', { name: 'Cannot log in to my account' })
+      await userEvent.click(fieldOption('Category', 'No Category'))
+
+      await waitFor(() =>
+        expect(api.patch).toHaveBeenCalledWith('/api/tickets/ticket-1', { category: null })
+      )
+    })
+
+    it('shows an error when the PATCH request fails', async () => {
+      vi.mocked(api.patch).mockRejectedValue(new Error('network error'))
+      renderPage()
+
+      await screen.findByRole('heading', { name: 'Cannot log in to my account' })
+      await userEvent.click(fieldOption('Category', TicketCategoryLabels[TicketCategory.refund_request]))
+
+      await screen.findByText('Failed to update category.')
+    })
+  })
+
   describe('assignment select', () => {
     it('shows "Unassigned" in the trigger when no agent is assigned', async () => {
       mockGet({ ...TICKET, assignedTo: null })
       renderPage()
 
       await screen.findByRole('heading', { name: 'Cannot log in to my account' })
-      expect(within(screen.getByRole('combobox')).getByText('Unassigned')).toBeInTheDocument()
+      expect(fieldCombobox('Assigned To')).toHaveTextContent('Unassigned')
     })
 
     it('shows the assigned agent name in the trigger when a ticket is already assigned', async () => {
@@ -186,7 +304,7 @@ describe('TicketDetailPage', () => {
       renderPage()
 
       await screen.findByRole('heading', { name: 'Cannot log in to my account' })
-      expect(within(screen.getByRole('combobox')).getByText('Bob Agent')).toBeInTheDocument()
+      expect(fieldCombobox('Assigned To')).toHaveTextContent('Bob Agent')
     })
 
     it('renders all agents as options', async () => {
@@ -194,9 +312,9 @@ describe('TicketDetailPage', () => {
       renderPage()
 
       await screen.findByRole('heading', { name: 'Cannot log in to my account' })
-      expect(screen.getByRole('option', { name: 'Unassigned' })).toBeInTheDocument()
-      expect(screen.getByRole('option', { name: 'Bob Agent' })).toBeInTheDocument()
-      expect(screen.getByRole('option', { name: 'Carol Agent' })).toBeInTheDocument()
+      expect(fieldOption('Assigned To', 'Unassigned')).toBeInTheDocument()
+      expect(fieldOption('Assigned To', 'Bob Agent')).toBeInTheDocument()
+      expect(fieldOption('Assigned To', 'Carol Agent')).toBeInTheDocument()
     })
 
     it('calls PATCH with the agent id when an agent is selected', async () => {
@@ -205,7 +323,7 @@ describe('TicketDetailPage', () => {
       renderPage()
 
       await screen.findByRole('heading', { name: 'Cannot log in to my account' })
-      await userEvent.click(screen.getByRole('option', { name: 'Bob Agent' }))
+      await userEvent.click(fieldOption('Assigned To', 'Bob Agent'))
 
       await waitFor(() =>
         expect(api.patch).toHaveBeenCalledWith('/api/tickets/ticket-1', { assignedToId: 'agent-1' })
@@ -218,7 +336,7 @@ describe('TicketDetailPage', () => {
       renderPage()
 
       await screen.findByRole('heading', { name: 'Cannot log in to my account' })
-      await userEvent.click(screen.getByRole('option', { name: 'Unassigned' }))
+      await userEvent.click(fieldOption('Assigned To', 'Unassigned'))
 
       await waitFor(() =>
         expect(api.patch).toHaveBeenCalledWith('/api/tickets/ticket-1', { assignedToId: null })
@@ -231,11 +349,9 @@ describe('TicketDetailPage', () => {
       renderPage()
 
       await screen.findByRole('heading', { name: 'Cannot log in to my account' })
-      await userEvent.click(screen.getByRole('option', { name: 'Bob Agent' }))
+      await userEvent.click(fieldOption('Assigned To', 'Bob Agent'))
 
-      await waitFor(() =>
-        expect(within(screen.getByRole('combobox')).getByText('Bob Agent')).toBeInTheDocument()
-      )
+      await waitFor(() => expect(fieldCombobox('Assigned To')).toHaveTextContent('Bob Agent'))
     })
 
     it('shows an error message when the PATCH request fails', async () => {
@@ -244,7 +360,7 @@ describe('TicketDetailPage', () => {
       renderPage()
 
       await screen.findByRole('heading', { name: 'Cannot log in to my account' })
-      await userEvent.click(screen.getByRole('option', { name: 'Bob Agent' }))
+      await userEvent.click(fieldOption('Assigned To', 'Bob Agent'))
 
       await screen.findByText('Failed to update assignee.')
     })
