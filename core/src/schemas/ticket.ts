@@ -16,3 +16,9 @@ export const SendGridWebhookSchema = z.object({
 })
 
 export type SendGridWebhookInput = z.infer<typeof SendGridWebhookSchema>
+
+export const AssignTicketSchema = z.object({
+  assignedToId: z.string().nullable(),
+})
+
+export type AssignTicketInput = z.infer<typeof AssignTicketSchema>

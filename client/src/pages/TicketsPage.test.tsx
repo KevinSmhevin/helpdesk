@@ -20,6 +20,7 @@ const TICKETS = [
     status: TicketStatus.open,
     category: TicketCategory.technical_question,
     createdAt: '2024-03-01T00:00:00Z',
+    assignedTo: { id: 'agent-1', name: 'Bob Agent', email: 'bob@example.com' },
   },
   {
     id: 'ticket-2',
@@ -29,6 +30,7 @@ const TICKETS = [
     status: TicketStatus.resolved,
     category: TicketCategory.refund_request,
     createdAt: '2024-02-01T00:00:00Z',
+    assignedTo: null,
   },
 ]
 
@@ -64,6 +66,7 @@ describe('TicketsPage', () => {
       expect(screen.getByRole('columnheader', { name: 'From' })).toBeInTheDocument()
       expect(screen.getByRole('columnheader', { name: 'Status' })).toBeInTheDocument()
       expect(screen.getByRole('columnheader', { name: 'Category' })).toBeInTheDocument()
+      expect(screen.getByRole('columnheader', { name: 'Assigned to' })).toBeInTheDocument()
       expect(screen.getByRole('columnheader', { name: 'Received' })).toBeInTheDocument()
       expect(document.querySelectorAll('[data-slot="skeleton"]').length).toBeGreaterThan(0)
     })
@@ -213,6 +216,28 @@ describe('TicketsPage', () => {
       expect(
         screen.getByText(new Date('2024-02-01T00:00:00Z').toLocaleDateString())
       ).toBeInTheDocument()
+    })
+
+    it('shows the assigned agent name when a ticket has an assignee', async () => {
+      renderPage()
+
+      await screen.findByText('Bob Agent')
+    })
+
+    it('shows an em-dash in the assigned column when a ticket has no assignee', async () => {
+      vi.mocked(api.get).mockResolvedValue({
+        data: {
+          tickets: [{ ...TICKETS[0], assignedTo: null }],
+          total: 1,
+          page: 1,
+          pageSize: 10,
+          totalPages: 1,
+        },
+      } as AxiosResponse)
+      renderPage()
+
+      await screen.findByText('Cannot log in to my account')
+      expect(screen.getByText('—')).toBeInTheDocument()
     })
 
     it('calls GET /api/tickets with default sort and page params', async () => {

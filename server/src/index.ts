@@ -8,6 +8,7 @@ import { auth } from './lib/auth.ts'
 import prisma from './lib/prisma.ts'
 import usersRouter from './routes/users.ts'
 import ticketsRouter from './routes/tickets.ts'
+import agentsRouter from './routes/agents.ts'
 import webhooksRouter from './routes/webhooks.ts'
 
 if (!process.env.BETTER_AUTH_SECRET || process.env.BETTER_AUTH_SECRET === 'change-me') {
@@ -51,6 +52,7 @@ app.get('/api/health', (_req, res) => {
 
 app.use('/api/users', usersRouter)
 app.use('/api/tickets', ticketsRouter)
+app.use('/api/agents', agentsRouter)
 app.use('/api/webhooks', webhooksRouter)
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

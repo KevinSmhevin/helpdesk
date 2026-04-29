@@ -1,12 +1,21 @@
 import { useParams, Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft } from 'lucide-react'
 import api from '@/lib/api'
 import { TicketStatus, TicketCategory, TicketCategoryLabels } from '@helpdesk/core'
 import { Skeleton } from '@/components/ui/skeleton'
 import { buttonVariants } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { statusStyles } from '@/lib/ticket'
 import { cn } from '@/lib/utils'
+
+type Agent = { id: string; name: string; email: string }
 
 type TicketDetail = {
   id: string
@@ -19,9 +28,12 @@ type TicketDetail = {
   category: TicketCategory | null
   messageId: string
   inReplyTo: string | null
+  assignedTo: Agent | null
   createdAt: string
   updatedAt: string
 }
+
+const UNASSIGNED = '__unassigned__'
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -34,11 +46,32 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 export default function TicketDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const queryClient = useQueryClient()
 
   const { data: ticket, isLoading, isError } = useQuery<TicketDetail>({
     queryKey: ['ticket', id],
     queryFn: () => api.get<TicketDetail>(`/api/tickets/${id}`).then((r) => r.data),
     enabled: !!id,
+  })
+
+  const { data: agents = [] } = useQuery<Agent[]>({
+    queryKey: ['agents'],
+    queryFn: () => api.get<Agent[]>('/api/agents').then((r) => r.data),
+  })
+
+  const assignMutation = useMutation({
+    mutationFn: (assignedToId: string | null) =>
+      api.patch<TicketDetail>(`/api/tickets/${id}`, { assignedToId }).then((r) => r.data),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<TicketDetail>(['ticket', id], updated)
+      queryClient.setQueryData<{ tickets: TicketDetail[] }>(['tickets'], (prev) => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          tickets: prev.tickets.map((t) => (t.id === updated.id ? { ...t, assignedTo: updated.assignedTo } : t)),
+        }
+      })
+    },
   })
 
   return (
@@ -93,6 +126,34 @@ export default function TicketDetailPage() {
             <Field label="Last updated">
               {new Date(ticket.updatedAt).toLocaleString()}
             </Field>
+            <div className="col-span-2">
+              <Field label="Assigned to">
+                <Select
+                  value={ticket.assignedTo?.id ?? UNASSIGNED}
+                  onValueChange={(v) =>
+                    assignMutation.mutate(v === UNASSIGNED ? null : v)
+                  }
+                  disabled={assignMutation.isPending}
+                >
+                  <SelectTrigger className="mt-1 w-56">
+                    <span className="flex flex-1 text-left text-sm">
+                      {ticket.assignedTo ? ticket.assignedTo.name : 'Unassigned'}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
+                    {agents.map((agent) => (
+                      <SelectItem key={agent.id} value={agent.id}>
+                        {agent.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {assignMutation.isError && (
+                  <p className="mt-1 text-xs text-destructive">Failed to update assignee.</p>
+                )}
+              </Field>
+            </div>
           </dl>
 
           <div className="border border-border rounded-xl p-5 space-y-2">
@@ -121,6 +182,7 @@ function TicketDetailSkeleton() {
         <Skeleton className="h-4 w-40" />
         <Skeleton className="h-4 w-32" />
         <Skeleton className="h-4 w-32" />
+        <Skeleton className="h-8 w-56 col-span-2" />
       </div>
       <div className="border border-border rounded-xl p-5 space-y-2">
         <Skeleton className="h-4 w-16" />
