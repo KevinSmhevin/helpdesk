@@ -26,6 +26,7 @@ model User {
   sessions        Session[]
   accounts        Account[]
   assignedTickets Ticket[]  @relation("AssignedTickets")
+  replies         Reply[]
 
   @@unique([email])
   @@map("user")
@@ -91,6 +92,11 @@ enum TicketCategory {
   refund_request
 }
 
+enum SenderType {
+  agent
+  customer
+}
+
 model Ticket {
   id           String          @id @default(cuid())
   subject      String
@@ -104,6 +110,7 @@ model Ticket {
   inReplyTo    String?
   assignedToId String?
   assignedTo   User?           @relation("AssignedTickets", fields: [assignedToId], references: [id])
+  replies      Reply[]
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
 
@@ -112,4 +119,18 @@ model Ticket {
   @@index([inReplyTo])
   @@index([assignedToId])
   @@map("ticket")
+}
+
+model Reply {
+  id         String     @id @default(cuid())
+  ticketId   String
+  ticket     Ticket     @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  body       String
+  senderType SenderType
+  userId     String?
+  user       User?      @relation(fields: [userId], references: [id])
+  createdAt  DateTime   @default(now())
+
+  @@index([ticketId])
+  @@map("reply")
 }

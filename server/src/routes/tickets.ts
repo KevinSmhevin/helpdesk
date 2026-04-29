@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import type { Prisma } from '@prisma/client'
-import { TicketSortColumn, SortOrder, UpdateTicketSchema } from '@helpdesk/core'
+import { SenderType as PrismaSenderType } from '@prisma/client'
+import { TicketSortColumn, SortOrder, UpdateTicketSchema, CreateReplySchema } from '@helpdesk/core'
 import { requireAuth } from '../lib/middleware.ts'
 import prisma from '../lib/prisma.ts'
 
@@ -17,6 +18,7 @@ const VALID_CATEGORIES = new Set(['general_question', 'technical_question', 'ref
 const Errors = {
   TICKET_NOT_FOUND: 'Ticket not found',
   AGENT_NOT_FOUND: 'Assigned user not found',
+  REPLY_BODY_REQUIRED: 'Reply body is required',
 } as const
 
 const assignedToSelect = {
@@ -131,6 +133,65 @@ router.patch('/:id', async (req, res) => {
   })
 
   res.json(updated)
+})
+
+const replyUserSelect = { id: true, name: true, email: true } as const
+
+router.get('/:id/replies', async (req, res) => {
+  const ticket = await prisma.ticket.findUnique({ where: { id: req.params.id } })
+  if (!ticket) {
+    res.status(404).json({ error: Errors.TICKET_NOT_FOUND })
+    return
+  }
+
+  const replies = await prisma.reply.findMany({
+    where: { ticketId: req.params.id },
+    orderBy: { createdAt: 'asc' },
+    select: {
+      id: true,
+      body: true,
+      senderType: true,
+      userId: true,
+      user: { select: replyUserSelect },
+      createdAt: true,
+    },
+  })
+
+  res.json(replies)
+})
+
+router.post('/:id/replies', async (req, res) => {
+  const result = CreateReplySchema.safeParse(req.body)
+  if (!result.success) {
+    res.status(400).json({ error: result.error.issues[0].message })
+    return
+  }
+
+  const ticket = await prisma.ticket.findUnique({ where: { id: req.params.id } })
+  if (!ticket) {
+    res.status(404).json({ error: Errors.TICKET_NOT_FOUND })
+    return
+  }
+
+  const session = res.locals.session as { user: { id: string } }
+  const reply = await prisma.reply.create({
+    data: {
+      ticketId: req.params.id,
+      body: result.data.body,
+      senderType: PrismaSenderType.agent,
+      userId: session.user.id,
+    },
+    select: {
+      id: true,
+      body: true,
+      senderType: true,
+      userId: true,
+      user: { select: replyUserSelect },
+      createdAt: true,
+    },
+  })
+
+  res.status(201).json(reply)
 })
 
 export default router

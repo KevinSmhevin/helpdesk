@@ -24,3 +24,9 @@ export const UpdateTicketSchema = z.object({
 })
 
 export type UpdateTicketInput = z.infer<typeof UpdateTicketSchema>
+
+export const CreateReplySchema = z.object({
+  body: z.string().min(1, 'Reply body is required'),
+})
+
+export type CreateReplyInput = z.infer<typeof CreateReplySchema>

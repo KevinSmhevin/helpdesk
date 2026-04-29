@@ -4,12 +4,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { vi, beforeEach, describe, it, expect } from 'vitest'
 import type { AxiosResponse } from 'axios'
-import { TicketStatus, TicketCategory, TicketCategoryLabels } from '@helpdesk/core'
+import { TicketStatus, TicketCategory, TicketCategoryLabels, SenderType } from '@helpdesk/core'
 import TicketDetailPage from './TicketDetailPage'
 import api from '@/lib/api'
 
 vi.mock('@/lib/api', () => ({
-  default: { get: vi.fn(), patch: vi.fn() },
+  default: { get: vi.fn(), patch: vi.fn(), post: vi.fn() },
 }))
 
 vi.mock('react-router-dom', async () => {
@@ -80,8 +80,38 @@ const TICKET: TicketFixture = {
   updatedAt: '2024-03-01T10:00:00Z',
 }
 
-function mockGet(ticket: TicketFixture = TICKET, agents = AGENTS) {
+type ReplyFixture = {
+  id: string
+  body: string
+  senderType: SenderType
+  userId: string | null
+  user: { id: string; name: string; email: string } | null
+  createdAt: string
+}
+
+const REPLIES: ReplyFixture[] = [
+  {
+    id: 'reply-1',
+    body: 'We are looking into this.',
+    senderType: SenderType.agent,
+    userId: 'agent-1',
+    user: { id: 'agent-1', name: 'Bob Agent', email: 'bob@example.com' },
+    createdAt: '2024-03-01T11:00:00Z',
+  },
+  {
+    id: 'reply-2',
+    body: 'Thank you!',
+    senderType: SenderType.customer,
+    userId: null,
+    user: null,
+    createdAt: '2024-03-01T12:00:00Z',
+  },
+]
+
+function mockGet(ticket: TicketFixture = TICKET, agents = AGENTS, replies: ReplyFixture[] = []) {
   vi.mocked(api.get).mockImplementation((url) => {
+    if ((url as string).endsWith('/replies'))
+      return Promise.resolve({ data: replies } as AxiosResponse)
     if ((url as string).startsWith('/api/tickets/'))
       return Promise.resolve({ data: ticket } as AxiosResponse)
     if (url === '/api/agents')
@@ -363,6 +393,96 @@ describe('TicketDetailPage', () => {
       await userEvent.click(fieldOption('Assigned To', 'Bob Agent'))
 
       await screen.findByText('Failed to update assignee.')
+    })
+  })
+
+  describe('reply thread', () => {
+    it('shows "No replies yet." when there are no replies', async () => {
+      mockGet(TICKET, AGENTS, [])
+      renderPage()
+
+      await screen.findByRole('heading', { name: 'Cannot log in to my account' })
+      await screen.findByText('No replies yet.')
+    })
+
+    it('renders agent and customer replies', async () => {
+      mockGet(TICKET, AGENTS, REPLIES)
+      renderPage()
+
+      await screen.findByText('We are looking into this.')
+      expect(screen.getByText('Thank you!')).toBeInTheDocument()
+    })
+
+    it('labels agent replies with "Agent" badge', async () => {
+      mockGet(TICKET, AGENTS, REPLIES)
+      renderPage()
+
+      await screen.findByText('We are looking into this.')
+      const agentBadges = screen.getAllByText('Agent')
+      expect(agentBadges.length).toBeGreaterThan(0)
+    })
+
+    it('labels customer replies with "Customer" badge', async () => {
+      mockGet(TICKET, AGENTS, REPLIES)
+      renderPage()
+
+      await screen.findByText('Thank you!')
+      expect(screen.getByText('Customer')).toBeInTheDocument()
+    })
+
+    it('shows the agent name for agent replies', async () => {
+      mockGet(TICKET, AGENTS, REPLIES)
+      renderPage()
+
+      await screen.findByText('We are looking into this.')
+      expect(screen.getAllByText('Bob Agent').length).toBeGreaterThan(0)
+    })
+  })
+
+  describe('reply form', () => {
+    beforeEach(() => mockGet())
+
+    it('renders the reply textarea and submit button', async () => {
+      renderPage()
+
+      await screen.findByRole('heading', { name: 'Cannot log in to my account' })
+      expect(screen.getByPlaceholderText('Write a reply…')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Send reply' })).toBeInTheDocument()
+    })
+
+    it('posts the reply body and clears the textarea on success', async () => {
+      const newReply: ReplyFixture = {
+        id: 'reply-new',
+        body: 'Hello, let me help you.',
+        senderType: SenderType.agent,
+        userId: 'agent-1',
+        user: { id: 'agent-1', name: 'Bob Agent', email: 'bob@example.com' },
+        createdAt: '2024-03-02T10:00:00Z',
+      }
+      vi.mocked(api.post).mockResolvedValue({ data: newReply } as AxiosResponse)
+      renderPage()
+
+      await screen.findByRole('heading', { name: 'Cannot log in to my account' })
+      await userEvent.type(screen.getByPlaceholderText('Write a reply…'), 'Hello, let me help you.')
+      await userEvent.click(screen.getByRole('button', { name: 'Send reply' }))
+
+      await waitFor(() =>
+        expect(api.post).toHaveBeenCalledWith('/api/tickets/ticket-1/replies', {
+          body: 'Hello, let me help you.',
+        })
+      )
+      await screen.findByText('Hello, let me help you.')
+    })
+
+    it('shows an error when the reply POST fails', async () => {
+      vi.mocked(api.post).mockRejectedValue(new Error('network error'))
+      renderPage()
+
+      await screen.findByRole('heading', { name: 'Cannot log in to my account' })
+      await userEvent.type(screen.getByPlaceholderText('Write a reply…'), 'Some reply')
+      await userEvent.click(screen.getByRole('button', { name: 'Send reply' }))
+
+      await screen.findByText('Failed to send reply. Please try again.')
     })
   })
 })
