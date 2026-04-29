@@ -32,8 +32,10 @@ const TICKETS = [
   },
 ]
 
-function mockGetTickets(tickets = TICKETS) {
-  vi.mocked(api.get).mockResolvedValue({ data: tickets } as AxiosResponse)
+function mockGetTickets(tickets = TICKETS, overrides: Record<string, unknown> = {}) {
+  vi.mocked(api.get).mockResolvedValue({
+    data: { tickets, total: tickets.length, page: 1, pageSize: 10, totalPages: 1, ...overrides },
+  } as AxiosResponse)
 }
 
 function renderPage() {
@@ -78,7 +80,9 @@ describe('TicketsPage', () => {
 
   describe('empty state', () => {
     it('shows empty message when no tickets are returned', async () => {
-      vi.mocked(api.get).mockResolvedValue({ data: [] } as AxiosResponse)
+      vi.mocked(api.get).mockResolvedValue({
+        data: { tickets: [], total: 0, page: 1, pageSize: 10, totalPages: 0 },
+      } as AxiosResponse)
       renderPage()
 
       await screen.findByText('No tickets yet.')
@@ -92,7 +96,6 @@ describe('TicketsPage', () => {
       renderPage()
 
       expect(screen.getByPlaceholderText('Search tickets…')).toBeInTheDocument()
-      // shadcn Select triggers render as comboboxes — one for status, one for category
       expect(screen.getAllByRole('combobox')).toHaveLength(2)
     })
 
@@ -102,6 +105,43 @@ describe('TicketsPage', () => {
       await screen.findByText('Cannot log in to my account')
       expect(screen.queryByRole('button', { name: /clear/i })).not.toBeInTheDocument()
     })
+  })
+
+  describe('pagination', () => {
+    it('shows "Showing X–Y of Z" when results are returned', async () => {
+      mockGetTickets(TICKETS, { total: 2, page: 1, pageSize: 10, totalPages: 1 })
+      renderPage()
+
+      await screen.findByText('Showing 1–2 of 2')
+    })
+
+    it('does not show pagination controls when all results fit on one page', async () => {
+      mockGetTickets(TICKETS, { total: 2, totalPages: 1 })
+      renderPage()
+
+      await screen.findByText('Cannot log in to my account')
+      expect(screen.queryByRole('button', { name: /previous/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /next/i })).not.toBeInTheDocument()
+    })
+
+    it('shows Previous and Next buttons when there are multiple pages', async () => {
+      mockGetTickets(TICKETS, { total: 101, page: 2, pageSize: 10, totalPages: 11 })
+      renderPage()
+
+      await screen.findByRole('button', { name: /previous/i })
+      expect(screen.getByRole('button', { name: /next/i })).toBeInTheDocument()
+      expect(screen.getByText(/page 1 of 11/i)).toBeInTheDocument()
+    })
+
+    it('disables Previous on the first page', async () => {
+      mockGetTickets(TICKETS, { total: 101, page: 1, pageSize: 10, totalPages: 11 })
+      renderPage()
+
+      const prev = await screen.findByRole('button', { name: /previous/i })
+      expect(prev).toBeDisabled()
+      expect(screen.getByRole('button', { name: /next/i })).not.toBeDisabled()
+    })
+
   })
 
   describe('ticket list', () => {
@@ -152,7 +192,13 @@ describe('TicketsPage', () => {
 
     it('renders an em-dash when category is null', async () => {
       vi.mocked(api.get).mockResolvedValue({
-        data: [{ ...TICKETS[0], category: null }],
+        data: {
+          tickets: [{ ...TICKETS[0], category: null }],
+          total: 1,
+          page: 1,
+          pageSize: 10,
+          totalPages: 1,
+        },
       } as AxiosResponse)
       renderPage()
 
@@ -169,11 +215,13 @@ describe('TicketsPage', () => {
       ).toBeInTheDocument()
     })
 
-    it('calls GET /api/tickets with default sort params', async () => {
+    it('calls GET /api/tickets with default sort and page params', async () => {
       renderPage()
 
       await screen.findByText('Cannot log in to my account')
-      expect(api.get).toHaveBeenCalledWith('/api/tickets?sortBy=createdAt&sortOrder=desc')
+      expect(api.get).toHaveBeenCalledWith(
+        '/api/tickets?sortBy=createdAt&sortOrder=desc&page=1',
+      )
     })
   })
 })

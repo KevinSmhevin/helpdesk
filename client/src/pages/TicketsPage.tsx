@@ -7,7 +7,7 @@ import {
   flexRender,
 } from '@tanstack/react-table'
 import type { SortingState } from '@tanstack/react-table'
-import { ArrowUp, ArrowDown, ArrowUpDown, Search, X } from 'lucide-react'
+import { ArrowUp, ArrowDown, ArrowUpDown, Search, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import api from '@/lib/api'
 import { TicketStatus, TicketCategory, TicketCategoryLabels, TicketSortColumn, SortOrder } from '@helpdesk/core'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -37,6 +37,14 @@ type Ticket = {
   status: TicketStatus
   category: TicketCategory | null
   createdAt: string
+}
+
+type TicketsResponse = {
+  tickets: Ticket[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
 }
 
 const statusStyles: Record<TicketStatus, string> = {
@@ -108,16 +116,22 @@ export default function TicketsPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [status, setStatus] = useState<TicketStatus | 'all'>('all')
   const [category, setCategory] = useState<TicketCategory | 'all'>('all')
+  const [page, setPage] = useState(1)
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchInput), 300)
     return () => clearTimeout(timer)
   }, [searchInput])
 
+  // Reset to page 1 whenever sort or filters change
+  useEffect(() => {
+    setPage(1)
+  }, [sorting, status, category, debouncedSearch])
+
   const hasActiveFilters = debouncedSearch !== '' || status !== 'all' || category !== 'all'
 
-  const { data: tickets = [], isLoading, isError } = useQuery<Ticket[]>({
-    queryKey: ['tickets', sorting, status, category, debouncedSearch],
+  const { data, isLoading, isError } = useQuery<TicketsResponse>({
+    queryKey: ['tickets', sorting, status, category, debouncedSearch, page],
     queryFn: async () => {
       const params = new URLSearchParams()
       const sort = sorting[0]
@@ -128,12 +142,19 @@ export default function TicketsPage() {
       if (status !== 'all') params.set('status', status)
       if (category !== 'all') params.set('category', category)
       if (debouncedSearch) params.set('search', debouncedSearch)
-      const qs = params.toString()
-      const res = await api.get<Ticket[]>(`/api/tickets${qs ? `?${qs}` : ''}`)
+      params.set('page', String(page))
+      const res = await api.get<TicketsResponse>(`/api/tickets?${params.toString()}`)
       return res.data
     },
     placeholderData: keepPreviousData,
   })
+
+  const tickets = data?.tickets ?? []
+  const total = data?.total ?? 0
+  const totalPages = data?.totalPages ?? 1
+  const pageSize = data?.pageSize ?? 10
+  const from = total === 0 ? 0 : (page - 1) * pageSize + 1
+  const to = Math.min(page * pageSize, total)
 
   const table = useReactTable({
     data: tickets,
@@ -259,6 +280,39 @@ export default function TicketsPage() {
               ))}
             </TableBody>
           </Table>
+        </div>
+      )}
+
+      {total > 0 && (
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <span>
+            Showing {from}–{to} of {total}
+          </span>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => p - 1)}
+                disabled={page <= 1}
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Previous
+              </Button>
+              <span className="px-3">
+                Page {page} of {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => p + 1)}
+                disabled={page >= totalPages}
+              >
+                Next
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>

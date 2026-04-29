@@ -8,6 +8,7 @@ const router = Router()
 
 router.use(requireAuth)
 
+const DEFAULT_PAGE_SIZE = 10
 const SORTABLE_COLUMNS = new Set<string>(Object.values(TicketSortColumn))
 const SORT_ORDERS = new Set<string>(Object.values(SortOrder))
 const VALID_STATUSES = new Set(['open', 'resolved', 'closed'])
@@ -23,6 +24,9 @@ router.get('/', async (req, res) => {
     typeof req.query.sortOrder === 'string' && SORT_ORDERS.has(req.query.sortOrder)
       ? (req.query.sortOrder as SortOrder)
       : SortOrder.desc
+
+  const page = Math.max(1, parseInt(req.query.page as string) || 1)
+  const pageSize = DEFAULT_PAGE_SIZE
 
   const where: Prisma.TicketWhereInput = {}
 
@@ -43,20 +47,28 @@ router.get('/', async (req, res) => {
     ]
   }
 
-  const tickets = await prisma.ticket.findMany({
-    select: {
-      id: true,
-      subject: true,
-      fromEmail: true,
-      fromName: true,
-      status: true,
-      category: true,
-      createdAt: true,
-    },
-    where,
-    orderBy: { [sortBy]: sortOrder },
-  })
-  res.json(tickets)
+  const orderBy = { [sortBy]: sortOrder }
+
+  const [tickets, total] = await prisma.$transaction([
+    prisma.ticket.findMany({
+      select: {
+        id: true,
+        subject: true,
+        fromEmail: true,
+        fromName: true,
+        status: true,
+        category: true,
+        createdAt: true,
+      },
+      where,
+      orderBy,
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.ticket.count({ where }),
+  ])
+
+  res.json({ tickets, total, page, pageSize, totalPages: Math.ceil(total / pageSize) })
 })
 
 export default router
