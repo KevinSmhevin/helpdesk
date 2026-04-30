@@ -120,12 +120,17 @@ router.delete('/:id', async (req, res) => {
     return void res.status(403).json({ error: Errors.CANNOT_DELETE_ADMIN })
   }
 
-  await prisma.user.update({
-    where: { id },
-    data: { deletedAt: new Date() },
-  })
-
-  await prisma.session.deleteMany({ where: { userId: id } })
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    }),
+    prisma.ticket.updateMany({
+      where: { assignedToId: id },
+      data: { assignedToId: null },
+    }),
+    prisma.session.deleteMany({ where: { userId: id } }),
+  ])
 
   res.status(204).send()
 })
