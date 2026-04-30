@@ -3,7 +3,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Pencil } from 'lucide-react'
 import api from '@/lib/api'
 import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
 import {
   Table,
   TableBody,
@@ -12,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import UsersTableSkeleton from './UsersTableSkeleton'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -46,32 +46,7 @@ export default function UsersTable({ users, isLoading, isError }: Props) {
     },
   })
 
-  if (isLoading) {
-    return (
-      <div className="border border-border rounded-xl overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              {COLUMNS.map((col) => (
-                <TableHead key={col} className="px-4">{col}</TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {Array.from({ length: 4 }).map((_, i) => (
-              <TableRow key={i}>
-                <TableCell className="px-4"><Skeleton className="h-4 w-28" /></TableCell>
-                <TableCell className="px-4"><Skeleton className="h-4 w-40" /></TableCell>
-                <TableCell className="px-4"><Skeleton className="h-5 w-12 rounded-full" /></TableCell>
-                <TableCell className="px-4"><Skeleton className="h-4 w-20" /></TableCell>
-                <TableCell className="px-4" />
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-    )
-  }
+  if (isLoading) return <UsersTableSkeleton />
 
   if (isError) {
     return <p className="text-sm text-destructive">Could not load users. Please try again.</p>

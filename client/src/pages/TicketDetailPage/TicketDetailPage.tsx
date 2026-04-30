@@ -1,11 +1,9 @@
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft } from 'lucide-react'
 import api from '@/lib/api'
 import { TicketStatus, TicketCategory } from '@helpdesk/core'
-import { Skeleton } from '@/components/ui/skeleton'
-import { buttonVariants } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import BackToTickets from './BackToTickets'
+import TicketDetailSkeleton from './TicketDetailSkeleton'
 import TicketMetaPanel from './TicketMetaPanel'
 import TicketMessagePanel from './TicketMessagePanel'
 import TicketReplyThread from './TicketReplyThread'
@@ -44,15 +42,7 @@ export default function TicketDetailPage() {
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
-      <div>
-        <Link
-          to="/tickets"
-          className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), '-ml-2 text-muted-foreground')}
-        >
-          <ArrowLeft className="h-4 w-4 mr-1" />
-          Back to tickets
-        </Link>
-      </div>
+      <BackToTickets />
 
       {isLoading ? (
         <TicketDetailSkeleton />
@@ -66,37 +56,6 @@ export default function TicketDetailPage() {
           <TicketReplyThread ticketId={ticket.id} fromName={ticket.fromName} fromEmail={ticket.fromEmail} />
         </>
       ) : null}
-    </div>
-  )
-}
-
-function TicketDetailSkeleton() {
-  return (
-    <div className="space-y-6">
-      <Skeleton className="h-8 w-2/3" />
-      <div className="border border-border rounded-xl p-5 grid grid-cols-2 gap-x-8">
-        <div className="space-y-4">
-          <Skeleton className="h-4 w-40" />
-          <Skeleton className="h-4 w-32" />
-          <Skeleton className="h-4 w-36" />
-          <Skeleton className="h-4 w-36" />
-        </div>
-        <div className="space-y-4">
-          <Skeleton className="h-8 w-full" />
-          <Skeleton className="h-8 w-full" />
-          <Skeleton className="h-8 w-full" />
-        </div>
-      </div>
-      <div className="border border-border rounded-xl p-5 space-y-2">
-        <Skeleton className="h-4 w-16" />
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-5/6" />
-        <Skeleton className="h-4 w-4/5" />
-      </div>
-      <div className="border border-border rounded-xl p-5 space-y-2">
-        <Skeleton className="h-4 w-16" />
-        <Skeleton className="h-16 w-full" />
-      </div>
     </div>
   )
 }
