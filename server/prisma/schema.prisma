@@ -126,6 +126,7 @@ model Reply {
   ticketId   String
   ticket     Ticket     @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   body       String
+  bodyHTML   String?
   senderType SenderType
   userId     String?
   user       User?      @relation(fields: [userId], references: [id])
