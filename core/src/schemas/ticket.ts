@@ -1,6 +1,24 @@
 import { z } from 'zod'
 import { TicketCategory, TicketStatus } from '../enums/ticket.ts'
 
+export type Agent = { id: string; name: string; email: string }
+
+export type Ticket = {
+  id: string
+  subject: string
+  body: string
+  fromEmail: string
+  fromName: string | null
+  toEmail: string
+  status: TicketStatus
+  category: TicketCategory | null
+  messageId: string
+  inReplyTo: string | null
+  assignedTo: Agent | null
+  createdAt: string
+  updatedAt: string
+}
+
 export const TicketCategoryLabels: Record<TicketCategory, string> = {
   [TicketCategory.general_question]: 'General Question',
   [TicketCategory.technical_question]: 'Technical Question',

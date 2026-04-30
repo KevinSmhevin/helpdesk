@@ -1,13 +1,12 @@
 import { useQueryClient, useMutation } from '@tanstack/react-query'
 import api from '@/lib/api'
-import { TicketStatus, TicketCategory, TicketCategoryLabels } from '@helpdesk/core'
+import { TicketStatus, TicketCategory, TicketCategoryLabels, type Ticket, type Agent } from '@helpdesk/core'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
 } from '@/components/ui/select'
-import type { Agent, TicketDetail } from './TicketDetailPage'
 
 const NO_CATEGORY = '__no_category__'
 const UNASSIGNED = '__unassigned__'
@@ -63,30 +62,30 @@ export default function TicketMetaPanel({
   agents,
 }: {
   ticketId: string
-  ticket: TicketDetail
+  ticket: Ticket
   agents: Agent[]
 }) {
   const queryClient = useQueryClient()
 
-  function updateCache(updated: TicketDetail) {
-    queryClient.setQueryData<TicketDetail>(['ticket', ticketId], updated)
+  function updateCache(updated: Ticket) {
+    queryClient.setQueryData<Ticket>(['ticket', ticketId], updated)
   }
 
   const statusMutation = useMutation({
     mutationFn: (value: TicketStatus) =>
-      api.patch<TicketDetail>(`/api/tickets/${ticketId}`, { status: value }).then((r) => r.data),
+      api.patch<Ticket>(`/api/tickets/${ticketId}`, { status: value }).then((r) => r.data),
     onSuccess: updateCache,
   })
 
   const categoryMutation = useMutation({
     mutationFn: (value: TicketCategory | null) =>
-      api.patch<TicketDetail>(`/api/tickets/${ticketId}`, { category: value }).then((r) => r.data),
+      api.patch<Ticket>(`/api/tickets/${ticketId}`, { category: value }).then((r) => r.data),
     onSuccess: updateCache,
   })
 
   const assignMutation = useMutation({
     mutationFn: (value: string | null) =>
-      api.patch<TicketDetail>(`/api/tickets/${ticketId}`, { assignedToId: value }).then((r) => r.data),
+      api.patch<Ticket>(`/api/tickets/${ticketId}`, { assignedToId: value }).then((r) => r.data),
     onSuccess: updateCache,
   })
 

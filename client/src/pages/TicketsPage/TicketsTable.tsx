@@ -7,7 +7,7 @@ import {
 } from '@tanstack/react-table'
 import type { SortingState, OnChangeFn } from '@tanstack/react-table'
 import { ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react'
-import { TicketStatus, TicketCategory, TicketCategoryLabels } from '@helpdesk/core'
+import { TicketCategoryLabels } from '@helpdesk/core'
 import { statusStyles } from '@/lib/ticket'
 import {
   Table,
@@ -18,7 +18,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import TicketsTableSkeleton from './TicketsTableSkeleton'
-import type { Ticket } from './TicketsPage'
+import type { Ticket } from '@helpdesk/core'
 
 type Props = {
   tickets: Ticket[]

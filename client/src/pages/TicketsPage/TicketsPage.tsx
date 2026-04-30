@@ -2,21 +2,10 @@ import { useState, useEffect } from 'react'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import type { SortingState } from '@tanstack/react-table'
 import api from '@/lib/api'
-import { TicketStatus, TicketCategory, TicketSortColumn, SortOrder } from '@helpdesk/core'
+import { TicketStatus, TicketCategory, TicketSortColumn, SortOrder, type Ticket } from '@helpdesk/core'
 import TicketsFilters from './TicketsFilters'
 import TicketsTable from './TicketsTable'
 import TicketsPagination from './TicketsPagination'
-
-export type Ticket = {
-  id: string
-  subject: string
-  fromEmail: string
-  fromName: string | null
-  status: TicketStatus
-  category: TicketCategory | null
-  createdAt: string
-  assignedTo: { id: string; name: string; email: string } | null
-}
 
 type TicketsResponse = {
   tickets: Ticket[]

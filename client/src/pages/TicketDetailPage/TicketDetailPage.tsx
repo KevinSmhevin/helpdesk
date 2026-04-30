@@ -1,37 +1,19 @@
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import api from '@/lib/api'
-import { TicketStatus, TicketCategory } from '@helpdesk/core'
+import { type Ticket, type Agent } from '@helpdesk/core'
 import BackToTickets from './BackToTickets'
 import TicketDetailSkeleton from './TicketDetailSkeleton'
 import TicketMetaPanel from './TicketMetaPanel'
 import TicketMessagePanel from './TicketMessagePanel'
 import TicketReplyThread from './TicketReplyThread'
 
-export type Agent = { id: string; name: string; email: string }
-
-export type TicketDetail = {
-  id: string
-  subject: string
-  body: string
-  fromEmail: string
-  fromName: string | null
-  toEmail: string
-  status: TicketStatus
-  category: TicketCategory | null
-  messageId: string
-  inReplyTo: string | null
-  assignedTo: Agent | null
-  createdAt: string
-  updatedAt: string
-}
-
 export default function TicketDetailPage() {
   const { id } = useParams<{ id: string }>()
 
-  const { data: ticket, isLoading, isError } = useQuery<TicketDetail>({
+  const { data: ticket, isLoading, isError } = useQuery<Ticket>({
     queryKey: ['ticket', id],
-    queryFn: () => api.get<TicketDetail>(`/api/tickets/${id}`).then((r) => r.data),
+    queryFn: () => api.get<Ticket>(`/api/tickets/${id}`).then((r) => r.data),
     enabled: !!id,
   })
 
