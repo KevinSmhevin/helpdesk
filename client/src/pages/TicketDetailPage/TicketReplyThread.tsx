@@ -1,11 +1,11 @@
-import { useRef } from 'react'
-import type { FormEvent } from 'react'
+import React, { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import { SenderType } from '@helpdesk/core'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { Sparkles } from 'lucide-react'
 
 type Reply = {
   id: string
@@ -26,7 +26,7 @@ export default function TicketReplyThread({
   fromEmail: string
 }) {
   const queryClient = useQueryClient()
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [draft, setDraft] = useState('')
 
   const { data: replies = [], isLoading } = useQuery<Reply[]>({
     queryKey: ['ticket-replies', ticketId],
@@ -38,16 +38,32 @@ export default function TicketReplyThread({
       api.post<Reply>(`/api/tickets/${ticketId}/replies`, { body }).then((r) => r.data),
     onSuccess: (newReply) => {
       queryClient.setQueryData<Reply[]>(['ticket-replies', ticketId], (prev = []) => [...prev, newReply])
-      if (textareaRef.current) textareaRef.current.value = ''
+      setDraft('')
     },
   })
 
-  function handleSubmit(e: FormEvent<HTMLFormElement>) {
+  const polishMutation = useMutation({
+    mutationFn: (body: string) =>
+      api.post<{ body: string }>(`/api/tickets/${ticketId}/polish`, { body }).then((r) => r.data),
+    onSuccess: (result) => {
+      setDraft(result.body)
+    },
+  })
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    const body = textareaRef.current?.value.trim() ?? ''
+    const body = draft.trim()
     if (!body) return
     replyMutation.mutate(body)
   }
+
+  function handlePolish() {
+    const body = draft.trim()
+    if (!body) return
+    polishMutation.mutate(body)
+  }
+
+  const isBusy = replyMutation.isPending || polishMutation.isPending
 
   return (
     <div className="border border-border rounded-xl overflow-hidden">
@@ -98,17 +114,31 @@ export default function TicketReplyThread({
 
       <form onSubmit={handleSubmit} className="border-t border-border p-5 space-y-3">
         <textarea
-          ref={textareaRef}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
           placeholder="Write a reply…"
           rows={4}
           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
-          disabled={replyMutation.isPending}
+          disabled={isBusy}
         />
         {replyMutation.isError && (
           <p className="text-xs text-destructive">Failed to send reply. Please try again.</p>
         )}
-        <div className="flex justify-end">
-          <Button type="submit" disabled={replyMutation.isPending} size="sm">
+        {polishMutation.isError && (
+          <p className="text-xs text-destructive">Failed to polish reply. Please try again.</p>
+        )}
+        <div className="flex justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={isBusy || !draft.trim()}
+            onClick={handlePolish}
+          >
+            <Sparkles className="size-3.5" />
+            {polishMutation.isPending ? 'Polishing…' : 'Polish'}
+          </Button>
+          <Button type="submit" disabled={isBusy} size="sm">
             {replyMutation.isPending ? 'Sending…' : 'Send reply'}
           </Button>
         </div>

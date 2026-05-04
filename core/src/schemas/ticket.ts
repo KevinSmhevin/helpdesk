@@ -72,3 +72,9 @@ export const CreateReplySchema = z.object({
 })
 
 export type CreateReplyInput = z.infer<typeof CreateReplySchema>
+
+export const PolishReplySchema = z.object({
+  body: z.string().min(1, 'Draft body is required'),
+})
+
+export type PolishReplyInput = z.infer<typeof PolishReplySchema>

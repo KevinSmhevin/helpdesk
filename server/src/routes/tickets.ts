@@ -1,9 +1,10 @@
 import { Router } from 'express'
 import type { Prisma } from '@prisma/client'
 import { SenderType as PrismaSenderType } from '@prisma/client'
-import { TicketSortColumn, SortOrder, UpdateTicketSchema, CreateReplySchema } from '@helpdesk/core'
+import { TicketSortColumn, SortOrder, UpdateTicketSchema, CreateReplySchema, PolishReplySchema } from '@helpdesk/core'
 import { requireAuth } from '../lib/middleware.ts'
 import prisma from '../lib/prisma.ts'
+import { polishReply } from '../lib/polish.ts'
 
 const router = Router()
 
@@ -192,6 +193,31 @@ router.post('/:id/replies', async (req, res) => {
   })
 
   res.status(201).json(reply)
+})
+
+router.post('/:id/polish', async (req, res) => {
+  const result = PolishReplySchema.safeParse(req.body)
+  if (!result.success) {
+    res.status(400).json({ error: result.error.issues[0].message })
+    return
+  }
+
+  const session = res.locals.session as { user: { id: string } }
+
+  const [ticket, agent] = await Promise.all([
+    prisma.ticket.findUnique({ where: { id: req.params.id }, select: { subject: true, fromName: true } }),
+    prisma.user.findUnique({ where: { id: session.user.id }, select: { name: true } }),
+  ])
+
+  if (!ticket) {
+    res.status(404).json({ error: Errors.TICKET_NOT_FOUND })
+    return
+  }
+
+  const agentName = agent?.name ?? 'Support Team'
+  const customerFirstName = ticket.fromName?.split(' ')[0] ?? null
+  const polished = await polishReply(result.data.body, ticket.subject, agentName, customerFirstName)
+  res.json({ body: polished })
 })
 
 export default router

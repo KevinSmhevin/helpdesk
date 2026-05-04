@@ -11,8 +11,10 @@
     "db:seed": "bun prisma/seed.ts"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.74",
     "@helpdesk/core": "workspace:*",
     "@prisma/client": "^6",
+    "ai": "^6.0.175",
     "better-auth": "^1.6.7",
     "cors": "^2.8.6",
     "dotenv": "^16",
