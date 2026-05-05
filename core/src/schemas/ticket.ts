@@ -78,3 +78,7 @@ export const PolishReplySchema = z.object({
 })
 
 export type PolishReplyInput = z.infer<typeof PolishReplySchema>
+
+export const SummarizeTicketSchema = z.object({})
+
+export type SummarizeTicketInput = z.infer<typeof SummarizeTicketSchema>

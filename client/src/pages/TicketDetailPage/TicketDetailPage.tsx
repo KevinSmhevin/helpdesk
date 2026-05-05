@@ -6,6 +6,7 @@ import BackToTickets from './BackToTickets'
 import TicketDetailSkeleton from './TicketDetailSkeleton'
 import TicketMetaPanel from './TicketMetaPanel'
 import TicketMessagePanel from './TicketMessagePanel'
+import TicketSummary from './TicketSummary'
 import TicketReplyThread from './TicketReplyThread'
 
 export default function TicketDetailPage() {
@@ -35,6 +36,7 @@ export default function TicketDetailPage() {
           <h1 className="text-2xl font-semibold text-foreground">{ticket.subject}</h1>
           <TicketMetaPanel ticketId={ticket.id} ticket={ticket} agents={agents} />
           <TicketMessagePanel body={ticket.body} />
+          <TicketSummary ticketId={ticket.id} />
           <TicketReplyThread ticketId={ticket.id} fromName={ticket.fromName} fromEmail={ticket.fromEmail} />
         </>
       ) : null}

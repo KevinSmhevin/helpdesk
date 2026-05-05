@@ -1,10 +1,11 @@
 import { Router } from 'express'
 import type { Prisma } from '@prisma/client'
 import { SenderType as PrismaSenderType } from '@prisma/client'
-import { TicketSortColumn, SortOrder, UpdateTicketSchema, CreateReplySchema, PolishReplySchema } from '@helpdesk/core'
+import { TicketSortColumn, SortOrder, UpdateTicketSchema, CreateReplySchema, PolishReplySchema, SummarizeTicketSchema } from '@helpdesk/core'
 import { requireAuth } from '../lib/middleware.ts'
 import prisma from '../lib/prisma.ts'
 import { polishReply } from '../lib/polish.ts'
+import { summarizeTicket } from '../lib/summarize.ts'
 
 const router = Router()
 
@@ -218,6 +219,33 @@ router.post('/:id/polish', async (req, res) => {
   const customerFirstName = ticket.fromName?.split(' ')[0] ?? null
   const polished = await polishReply(result.data.body, ticket.subject, agentName, customerFirstName)
   res.json({ body: polished })
+})
+
+router.post('/:id/summarize', async (req, res) => {
+  const result = SummarizeTicketSchema.safeParse(req.body)
+  if (!result.success) {
+    res.status(400).json({ error: result.error.issues[0].message })
+    return
+  }
+
+  const ticket = await prisma.ticket.findUnique({
+    where: { id: req.params.id },
+    select: { subject: true, body: true },
+  })
+
+  if (!ticket) {
+    res.status(404).json({ error: Errors.TICKET_NOT_FOUND })
+    return
+  }
+
+  const replies = await prisma.reply.findMany({
+    where: { ticketId: req.params.id },
+    orderBy: { createdAt: 'asc' },
+    select: { body: true, senderType: true },
+  })
+
+  const summary = await summarizeTicket(ticket.subject, ticket.body, replies)
+  res.json({ summary })
 })
 
 export default router
