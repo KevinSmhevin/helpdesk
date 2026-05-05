@@ -485,4 +485,80 @@ describe('TicketDetailPage', () => {
       await screen.findByText('Failed to send reply. Please try again.')
     })
   })
+
+  describe('polish reply', () => {
+    beforeEach(() => mockGet())
+
+    it('renders the Polish button', async () => {
+      renderPage()
+
+      await screen.findByRole('heading', { name: 'Cannot log in to my account' })
+      expect(screen.getByRole('button', { name: /polish/i })).toBeInTheDocument()
+    })
+
+    it('disables the Polish button when the textarea is empty', async () => {
+      renderPage()
+
+      await screen.findByRole('heading', { name: 'Cannot log in to my account' })
+      expect(screen.getByRole('button', { name: /polish/i })).toBeDisabled()
+    })
+
+    it('enables the Polish button once the textarea has content', async () => {
+      renderPage()
+
+      await screen.findByRole('heading', { name: 'Cannot log in to my account' })
+      await userEvent.type(screen.getByPlaceholderText('Write a reply…'), 'draft text')
+
+      expect(screen.getByRole('button', { name: /polish/i })).toBeEnabled()
+    })
+
+    it('calls POST /polish with the draft body when clicked', async () => {
+      vi.mocked(api.post).mockImplementation((url) => {
+        if ((url as string).endsWith('/polish'))
+          return Promise.resolve({ data: { body: 'Polished reply.' } } as AxiosResponse)
+        return Promise.reject(new Error(`unexpected url: ${url}`))
+      })
+      renderPage()
+
+      await screen.findByRole('heading', { name: 'Cannot log in to my account' })
+      await userEvent.type(screen.getByPlaceholderText('Write a reply…'), 'rough draft')
+      await userEvent.click(screen.getByRole('button', { name: /polish/i }))
+
+      await waitFor(() =>
+        expect(api.post).toHaveBeenCalledWith('/api/tickets/ticket-1/polish', { body: 'rough draft' })
+      )
+    })
+
+    it('replaces the textarea content with the polished text on success', async () => {
+      vi.mocked(api.post).mockImplementation((url) => {
+        if ((url as string).endsWith('/polish'))
+          return Promise.resolve({ data: { body: 'Polished reply.' } } as AxiosResponse)
+        return Promise.reject(new Error(`unexpected url: ${url}`))
+      })
+      renderPage()
+
+      await screen.findByRole('heading', { name: 'Cannot log in to my account' })
+      await userEvent.type(screen.getByPlaceholderText('Write a reply…'), 'rough draft')
+      await userEvent.click(screen.getByRole('button', { name: /polish/i }))
+
+      await waitFor(() =>
+        expect(screen.getByPlaceholderText('Write a reply…')).toHaveValue('Polished reply.')
+      )
+    })
+
+    it('shows an error when the polish POST fails', async () => {
+      vi.mocked(api.post).mockImplementation((url) => {
+        if ((url as string).endsWith('/polish'))
+          return Promise.reject(new Error('network error'))
+        return Promise.reject(new Error(`unexpected url: ${url}`))
+      })
+      renderPage()
+
+      await screen.findByRole('heading', { name: 'Cannot log in to my account' })
+      await userEvent.type(screen.getByPlaceholderText('Write a reply…'), 'rough draft')
+      await userEvent.click(screen.getByRole('button', { name: /polish/i }))
+
+      await screen.findByText('Failed to polish reply. Please try again.')
+    })
+  })
 })
