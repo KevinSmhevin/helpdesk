@@ -12,6 +12,7 @@ Use Context7 MCP (`resolve-library-id` → `query-docs`) to fetch up-to-date doc
 - **Backend:** Express 5 + TypeScript (`/server`) — `helmet`, `cors`, `express-rate-limit`, `multer` (multipart for SendGrid)
 - **Frontend:** React + Vite + TypeScript + Tailwind v4 + React Router v6 + shadcn/ui (`/client`)
 - **Tables:** `@tanstack/react-table` v8 (sorting/columns)
+- **Charts:** `recharts` v3 (dashboard bar chart)
 - **Icons:** `lucide-react`
 - **Data fetching:** axios + TanStack Query v5 (`@tanstack/react-query`)
 - **Database:** PostgreSQL via Prisma
@@ -35,9 +36,11 @@ helpdesk/
 │       │   └── ticket.ts              # TicketStatus, TicketCategory, TicketSortColumn
 │       ├── schemas/
 │       │   ├── user.ts                # CreateUserSchema, UpdateUserSchema
-│       │   └── ticket.ts              # SendGridWebhookSchema, UpdateTicketSchema,
-│       │                              # CreateReplySchema, TicketCategoryLabels,
-│       │                              # Ticket + Agent types (single source of truth)
+│       │   ├── ticket.ts              # SendGridWebhookSchema, UpdateTicketSchema,
+│       │   │                          # CreateReplySchema, PolishReplySchema,
+│       │   │                          # SummarizeTicketSchema, TicketCategoryLabels,
+│       │   │                          # Ticket + Agent types (single source of truth)
+│       │   └── dashboard.ts           # DashboardData type
 │       └── index.ts                   # Barrel re-exports
 ├── e2e/
 │   ├── tests/
@@ -66,7 +69,9 @@ helpdesk/
 │       │   └── NavBar.tsx             # Nav links (Users link admin-only) + sign out
 │       ├── pages/                     # One folder per page; co-located components + index.ts
 │       │   ├── LoginPage/             # LoginPage, LoginForm, LoginSkeleton
-│       │   ├── HomePage/              # HomePage, ServerStatus, ServerStatusSkeleton
+│       │   ├── HomePage/              # HomePage (dashboard), DashboardMetrics,
+│       │   │                          # DashboardMetricsSkeleton, TicketsBarChart,
+│       │   │                          # ServerStatus, ServerStatusSkeleton
 │       │   ├── TicketsPage/           # TicketsPage, TicketsFilters, TicketsTable,
 │       │   │                          # TicketsPagination, TicketsTableSkeleton
 │       │   ├── TicketDetailPage/      # TicketDetailPage, BackToTickets, TicketMetaPanel,
@@ -80,18 +85,35 @@ helpdesk/
     │   ├── lib/
     │   │   ├── auth.ts                # Better Auth config (Role additionalField, sessions)
     │   │   ├── middleware.ts          # requireAuth / requireAdmin (sets res.locals.session)
-    │   │   └── prisma.ts              # Prisma client singleton
+    │   │   ├── prisma.ts              # Prisma client singleton
+    │   │   ├── boss.ts                # pg-boss singleton
+    │   │   ├── classify.ts            # AI ticket categorisation
+    │   │   ├── autoResolve.ts         # AI resolve-on-arrival; sets resolvedByAI/resolvedAt,
+    │   │   │                          # unassigns autoResolver on failure
+    │   │   ├── polish.ts              # AI reply polish
+    │   │   ├── summarize.ts           # AI ticket summarisation
+    │   │   └── constants.ts           # AUTO_RESOLVER_EMAIL (single source of truth)
+    │   ├── types/
+    │   │   └── dashboard.ts           # Server-internal $queryRaw row types
+    │   ├── workers/
+    │   │   ├── classify.ts            # CLASSIFY_QUEUE pg-boss worker
+    │   │   └── autoResolve.ts         # AUTO_RESOLVE_QUEUE pg-boss worker
     │   ├── routes/
-    │   │   ├── tickets.ts             # GET/PATCH /api/tickets[/:id], replies subresource
+    │   │   ├── tickets.ts             # GET/PATCH /api/tickets[/:id], replies, polish, summarize
     │   │   ├── users.ts               # Admin-only user CRUD (soft delete)
     │   │   ├── agents.ts              # GET /api/agents — active agents for assignment dropdowns
-    │   │   └── webhooks.ts            # POST /api/webhooks/email — SendGrid inbound parse
+    │   │   ├── dashboard.ts           # GET /api/dashboard — calls stored functions only
+    │   │   └── webhooks.ts            # POST /api/webhooks/email — SendGrid inbound parse;
+    │   │                              # assigns new tickets to autoResolver
     │   └── index.ts                   # App entry — helmet, cors, rate-limit, error handler
     └── prisma/
         ├── schema.prisma              # User, Session, Account, Verification, Ticket, Reply
+        ├── migrations/                # Prisma migrations — includes raw SQL migration
+        │                              # `add_dashboard_functions` defining stored functions
         ├── seed.ts                    # Seeds admin (prod/dev)
         ├── seed-test.ts               # Seeds admin + agent (test DB only)
         ├── seed-tickets.ts            # Seeds ~100 demo tickets with varied dates/categories
+        ├── seed-auto-resolver.ts      # Seeds the autoResolver agent user
         └── teardown.ts                # Truncates all tables
 ```
 
@@ -120,8 +142,9 @@ bun run dev:client   # Vite on :5173
 cd server && bunx prisma migrate dev
 cd server && bunx prisma generate
 cd server && bunx prisma studio
-cd server && bun prisma/seed.ts          # admin only
-cd server && bun prisma/seed-tickets.ts  # ~100 demo tickets
+cd server && bun prisma/seed.ts                # admin only
+cd server && bun prisma/seed-auto-resolver.ts  # autoResolver agent (required for inbound flow)
+cd server && bun prisma/seed-tickets.ts        # ~100 demo tickets
 
 # Unit / component tests (from client/)
 bun run test          # run once
@@ -236,11 +259,12 @@ Use `ProtectedRoute` (any session) or `AdminRoute` (admin only) in `App.tsx`:
 
 ### Tickets
 
-- **Statuses:** open, resolved, closed
-- **Categories:** General Question, Technical Question, Refund Request — nullable (a ticket can have no category)
-- **Inbound:** SendGrid parse webhook (`POST /api/webhooks/email?token=…`). The webhook parses `From`, `To`, `Subject`, `Message-ID`, and `In-Reply-To` from the multipart body. Tickets are deduplicated by `messageId` (returns 200 with `{ ok: true }` on duplicate so SendGrid does not retry). Express 5's error handler also collapses Prisma `P2002` unique-constraint violations to a 200 fallback
-- **Assignment:** tickets have an optional `assignedToId` referencing a `User`. Reassignment is done via `PATCH /api/tickets/:id`
-- **Replies:** threaded via the `Reply` model with `senderType` of `agent` (linked to a User) or `customer` (no User). Agent replies authored through the UI write `senderType: 'agent'` and `userId: <session.user.id>`
+- **Statuses:** `new` and `processing` (transient — between webhook arrival and the auto-resolve worker finishing), then one of `open`, `resolved`, `closed`. The tickets list endpoint filters out the transient statuses by default
+- **Categories:** General Question, Technical Question, Refund Request — nullable (a ticket can have no category). The `classify` worker fills this in asynchronously
+- **AI-resolution tracking:** `Ticket.resolvedByAI` (Boolean, default false) and `Ticket.resolvedAt` (DateTime?). Set together by the auto-resolve worker when Claude can fully resolve the ticket. Used by the dashboard's "Resolved by AI" / "Avg resolution time" metrics
+- **Inbound:** SendGrid parse webhook (`POST /api/webhooks/email?token=…`). The webhook parses `From`, `To`, `Subject`, `Message-ID`, and `In-Reply-To` from the multipart body. Tickets are deduplicated by `messageId` (returns 200 with `{ ok: true }` on duplicate so SendGrid does not retry). Express 5's error handler also collapses Prisma `P2002` unique-constraint violations to a 200 fallback. Every new ticket is assigned to the `autoResolver` agent on creation, then enqueued onto `AUTO_RESOLVE_QUEUE` and `CLASSIFY_QUEUE`
+- **Assignment:** tickets have an optional `assignedToId` referencing a `User`. Reassignment is done via `PATCH /api/tickets/:id`. The `autoResolver` user is treated like any other agent for assignment purposes
+- **Replies:** threaded via the `Reply` model with `senderType` of `agent` (linked to a User) or `customer` (no User). Agent replies authored through the UI write `senderType: 'agent'` and `userId: <session.user.id>`. AI-generated replies write `senderType: 'agent'` and `userId: <autoResolver.id>`
 
 ### Users
 
@@ -250,9 +274,10 @@ Use `ProtectedRoute` (any session) or `AdminRoute` (admin only) in `App.tsx`:
 
 ### AI / email
 
-- **AI responses:** auto-sent on ticket creation, no agent approval needed
+- **Auto-resolve:** on ticket creation the `autoResolve` job (pg-boss queue `AUTO_RESOLVE_QUEUE`) calls Claude with the knowledge base at `server/src/data/knowledge-base.md`. If `canResolve: true`, the worker creates an agent reply, marks the ticket `resolved`, sets `resolvedByAI=true` + `resolvedAt=now()`, and keeps the ticket assigned to `autoResolver`. If `canResolve: false`, the worker sets the ticket to `open` and **unassigns** it (`assignedToId=null`) so a human agent can pick it up
+- **Classification:** the `classify` job (queue `CLASSIFY_QUEUE`) categorises the ticket into one of the three categories. Runs in parallel with auto-resolve
 - **Email replies:** thread to existing tickets via `In-Reply-To` header
-- **Routing:** tickets auto-assigned to agent/team based on category
+- **autoResolver agent:** a real `User` row with `role: agent` and email `auto-resolver@helpdesk.internal`. Created by `server/prisma/seed-auto-resolver.ts`. The email is the single source of truth via `AUTO_RESOLVER_EMAIL` exported from `server/src/lib/constants.ts` — both `webhooks.ts` (for assignment) and `autoResolve.ts` (for unassignment + reply authorship) look up the user by this email. Never inline the email string
 
 ## API Endpoints
 
@@ -268,11 +293,42 @@ All routes live in `server/src/routes/<resource>.ts` and are mounted in `server/
 | `PATCH` | `/api/tickets/:id` | auth | Body validated by `UpdateTicketSchema` (`assignedToId?`, `status?`, `category?`) |
 | `GET` | `/api/tickets/:id/replies` | auth | Returns replies sorted `createdAt asc`, each with `user` |
 | `POST` | `/api/tickets/:id/replies` | auth | Body validated by `CreateReplySchema` (`body`). Server forces `senderType: agent` and `userId: session.user.id` |
+| `POST` | `/api/tickets/:id/polish` | auth | Body `PolishReplySchema`. Returns AI-polished draft body |
+| `POST` | `/api/tickets/:id/summarize` | auth | Returns AI summary of the ticket thread |
 | `GET` | `/api/agents` | auth | Active agents only (`deletedAt: null`, `role: agent`), used by assignment dropdowns |
+| `GET` | `/api/dashboard` | auth | Returns `DashboardData`: total/open/AI-resolved counts, AI-resolved %, avg resolution time (hours), `ticketsPerDay` (30 days, zero-filled). Computed entirely via PostgreSQL stored functions |
 | `GET` | `/api/users` | admin | Active users (`deletedAt: null`) |
 | `POST` | `/api/users` | admin | `CreateUserSchema`. Hashes password with Better Auth `hashPassword`, creates `Account` row with `providerId: 'credential'` |
 | `PUT` | `/api/users/:id` | admin | `UpdateUserSchema`. Empty `password` keeps the existing one |
 | `DELETE` | `/api/users/:id` | admin | Soft delete. Refuses self-delete (400) and admin-delete (403) |
+
+## Dashboard
+
+The `/` route renders the dashboard at `client/src/pages/HomePage/HomePage.tsx`. It fetches `GET /api/dashboard` and renders `DashboardMetrics` (4 stat cards) plus `TicketsBarChart` (recharts `BarChart` of the past 30 days, zero-filled).
+
+### Stats live in stored functions
+
+All aggregation SQL for the dashboard is defined as PostgreSQL stored functions in the migration `server/prisma/migrations/20260506193559_add_dashboard_functions/migration.sql`:
+
+- `dashboard_total_tickets()` → `bigint`
+- `dashboard_open_tickets()` → `bigint`
+- `dashboard_resolved_by_ai()` → `bigint`
+- `dashboard_avg_resolution_hours()` → `double precision` (null if no resolved tickets)
+- `dashboard_tickets_per_day()` → `TABLE(date text, count bigint)` (last 30 days, grouped by UTC date)
+
+The route handler (`server/src/routes/dashboard.ts`) only calls these functions via `prisma.$queryRaw` — it does **not** inline aggregation SQL. Use a column alias on scalar function calls (e.g. `SELECT dashboard_total_tickets() AS count`) so the row type stays clean.
+
+### Adding new dashboard metrics
+
+1. Add a new `CREATE OR REPLACE FUNCTION ...` to a fresh migration (`bunx prisma migrate dev --create-only --name add_<metric>_function`, then edit the SQL)
+2. Add a row type to `server/src/types/dashboard.ts` if the shape doesn't already match `RawCount` / `RawAvgHours` / `RawDayCount`
+3. Add the field to `DashboardData` in `core/src/schemas/dashboard.ts`
+4. Call the function from `server/src/routes/dashboard.ts` and surface in the response
+5. Render it in `DashboardMetrics.tsx` or a new sibling component
+
+### Raw-query row types
+
+Server-internal `$queryRaw` row types live in `server/src/types/dashboard.ts` (`RawCount`, `RawAvgHours`, `RawDayCount`). Never declare these inline at the top of a route module.
 
 ## Data Fetching
 
@@ -315,7 +371,7 @@ const mutation = useMutation({
 
 ### Shared types
 
-Shared API types live in `core/src/schemas/<resource>.ts` and are exported from `core/src/index.ts`. Both client and server import them as `@helpdesk/core`. The current shared types are `Ticket` and `Agent` — they are the single source of truth and must not be redefined per page or pick-narrowed. List endpoints return a subset of `Ticket` fields; that's fine — components access only the fields they need.
+Shared API types live in `core/src/schemas/<resource>.ts` and are exported from `core/src/index.ts`. Both client and server import them as `@helpdesk/core`. Current shared types: `Ticket`, `Agent`, `DashboardData`. They are the single source of truth and must not be redefined per page or pick-narrowed. List endpoints return a subset of `Ticket` fields; that's fine — components access only the fields they need. Prefer derived types like `DashboardData['ticketsPerDay']` to re-declaring nested shapes.
 
 ## UI Components (shadcn/ui)
 
@@ -477,3 +533,7 @@ E2E specs that share DB state should declare `test.describe.configure({ mode: 's
 - **Webhook idempotency:** Webhooks must dedupe by an external identifier (e.g. `Message-ID`) and return `200` on duplicates so the upstream service does not retry. Validate auth tokens via a query-string parameter compared against `process.env.<SECRET>` in middleware applied to the webhook route
 - **Session reads in handlers:** Read the session from `res.locals.session` (set by `requireAuth` / `requireAdmin`). Don't re-call `auth.api.getSession` inside handlers
 - **Server boot guards:** Required secrets (`BETTER_AUTH_SECRET`, `SENDGRID_WEBHOOK_SECRET`) are validated at process start in `server/src/index.ts` — the server refuses to boot if they're missing. Add new mandatory secrets to that block when introducing them
+- **Aggregation SQL → stored functions:** Any non-trivial aggregation query (counts, averages, time-bucket rollups) must be defined as a PostgreSQL stored function in a Prisma migration (`bunx prisma migrate dev --create-only --name add_<x>_function`, edit the SQL, then `bunx prisma migrate dev` to apply). Call it from the route via `prisma.$queryRaw\`SELECT my_fn() AS alias\``. Don't inline aggregation SQL in `$queryRaw` template literals at the route layer — keep the SQL in one auditable place (the migration) so the query plan is cached and handlers stay declarative
+- **Server-internal types:** Types that don't cross the client/server boundary (e.g. `$queryRaw` row shapes, worker job payloads, internal helper types) live in `server/src/types/<resource>.ts`. Never declare these inline at the top of a route or worker module. Reserve `core/src/schemas/<resource>.ts` for types the client also imports
+- **Prisma column quoting in raw SQL:** Prisma keeps camelCase field names in PostgreSQL — `createdAt`, `resolvedByAI`, `resolvedAt`, etc. are stored as-is, NOT snake_cased. In any raw SQL (stored function bodies or `$queryRaw`) you must double-quote camelCase column names: `"createdAt"`, `"resolvedByAI"`. Unquoted identifiers are folded to lowercase by Postgres and the query will silently fail or throw "column does not exist"
+- **Module-level side effects in scripts:** Seed scripts (`prisma/seed-*.ts`) call `main()` at module top-level and disconnect Prisma in `finally`. Never import from a seed script in app code — importing it triggers the seed run. Extract any constant the script and app share (e.g. `AUTO_RESOLVER_EMAIL`) to `server/src/lib/constants.ts` and import that into both. The server `tsconfig.json` `include` covers both `src` and `prisma` so seed-script type errors surface in normal `tsc` runs
