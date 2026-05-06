@@ -8,6 +8,7 @@ import { auth } from './lib/auth.ts'
 import prisma from './lib/prisma.ts'
 import boss from './lib/boss.ts'
 import { registerClassifyWorker } from './workers/classify.ts'
+import { registerAutoResolveWorker } from './workers/autoResolve.ts'
 import usersRouter from './routes/users.ts'
 import ticketsRouter from './routes/tickets.ts'
 import agentsRouter from './routes/agents.ts'
@@ -72,6 +73,7 @@ async function start() {
 
   await boss.start()
   await registerClassifyWorker()
+  await registerAutoResolveWorker()
   console.log('Job queue started')
 
   const server = app.listen(port, () => {

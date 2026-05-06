@@ -81,6 +81,8 @@ model Verification {
 }
 
 enum TicketStatus {
+  new
+  processing
   open
   resolved
   closed

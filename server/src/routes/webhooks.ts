@@ -5,6 +5,8 @@ import prisma from '../lib/prisma.ts'
 import { SendGridWebhookSchema } from '@helpdesk/core'
 import boss from '../lib/boss.ts'
 import { CLASSIFY_QUEUE } from '../workers/classify.ts'
+import { AUTO_RESOLVE_QUEUE } from '../workers/autoResolve.ts'
+import { TicketStatus } from '@helpdesk/core'
 
 const router = Router()
 
@@ -77,10 +79,19 @@ router.post('/email', requireWebhookToken, upload.none(), async (req: Request, r
       toEmail,
       messageId,
       inReplyTo,
+      status: TicketStatus.new,
     },
   })
 
-  await boss.send(CLASSIFY_QUEUE, { ticketId: ticket.id, subject: subject.trim(), body: text.trim() })
+  await Promise.all([
+    boss.send(AUTO_RESOLVE_QUEUE, {
+      ticketId: ticket.id,
+      subject: subject.trim(),
+      body: text.trim(),
+      fromName: fromName,
+    }),
+    boss.send(CLASSIFY_QUEUE, { ticketId: ticket.id, subject: subject.trim(), body: text.trim() }),
+  ])
 
   res.status(200).json({ ok: true })
 })

@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import type { Prisma } from '@prisma/client'
 import { SenderType as PrismaSenderType } from '@prisma/client'
-import { TicketSortColumn, SortOrder, UpdateTicketSchema, CreateReplySchema, PolishReplySchema, SummarizeTicketSchema } from '@helpdesk/core'
+import { TicketSortColumn, SortOrder, TicketStatus, UpdateTicketSchema, CreateReplySchema, PolishReplySchema, SummarizeTicketSchema } from '@helpdesk/core'
 import { requireAuth } from '../lib/middleware.ts'
 import prisma from '../lib/prisma.ts'
 import { polishReply } from '../lib/polish.ts'
@@ -14,7 +14,8 @@ router.use(requireAuth)
 const DEFAULT_PAGE_SIZE = 10
 const SORTABLE_COLUMNS = new Set<string>(Object.values(TicketSortColumn))
 const SORT_ORDERS = new Set<string>(Object.values(SortOrder))
-const VALID_STATUSES = new Set(['open', 'resolved', 'closed'])
+const VALID_STATUSES = new Set(Object.values(TicketStatus))
+const TRANSIENT_STATUSES = [TicketStatus.new, TicketStatus.processing]
 const VALID_CATEGORIES = new Set(['general_question', 'technical_question', 'refund_request'])
 
 const Errors = {
@@ -47,6 +48,8 @@ router.get('/', async (req, res) => {
 
   if (typeof req.query.status === 'string' && VALID_STATUSES.has(req.query.status)) {
     where.status = req.query.status as Prisma.EnumTicketStatusFilter
+  } else {
+    where.status = { notIn: TRANSIENT_STATUSES }
   }
 
   if (typeof req.query.category === 'string' && VALID_CATEGORIES.has(req.query.category)) {

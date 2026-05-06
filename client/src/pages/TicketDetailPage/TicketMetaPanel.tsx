@@ -12,6 +12,8 @@ const NO_CATEGORY = '__no_category__'
 const UNASSIGNED = '__unassigned__'
 
 const statusLabels: Record<TicketStatus, string> = {
+  [TicketStatus.new]: 'New',
+  [TicketStatus.processing]: 'Processing',
   [TicketStatus.open]: 'Open',
   [TicketStatus.resolved]: 'Resolved',
   [TicketStatus.closed]: 'Closed',
