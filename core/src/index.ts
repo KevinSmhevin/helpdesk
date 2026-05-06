@@ -1,3 +1,4 @@
+export type { DashboardData } from './schemas/dashboard.ts'
 export { CreateUserSchema, UpdateUserSchema } from './schemas/user.ts'
 export type { CreateUserInput, UpdateUserInput } from './schemas/user.ts'
 export { Role } from './enums/role.ts'

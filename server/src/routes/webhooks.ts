@@ -7,6 +7,7 @@ import boss from '../lib/boss.ts'
 import { CLASSIFY_QUEUE } from '../workers/classify.ts'
 import { AUTO_RESOLVE_QUEUE } from '../workers/autoResolve.ts'
 import { TicketStatus } from '@helpdesk/core'
+import { AUTO_RESOLVER_EMAIL } from '../lib/constants.ts'
 
 const router = Router()
 
@@ -48,6 +49,18 @@ function parseEmail(address: string): string {
   return match ? match[1] : address.trim()
 }
 
+let autoResolverIdCache: string | null | undefined = undefined
+
+async function getAutoResolverId(): Promise<string | null> {
+  if (autoResolverIdCache !== undefined) return autoResolverIdCache
+  const user = await prisma.user.findUnique({
+    where: { email: AUTO_RESOLVER_EMAIL },
+    select: { id: true },
+  })
+  autoResolverIdCache = user?.id ?? null
+  return autoResolverIdCache
+}
+
 router.post('/email', requireWebhookToken, upload.none(), async (req: Request, res: Response) => {
   const result = SendGridWebhookSchema.safeParse(req.body)
   if (!result.success) {
@@ -69,6 +82,7 @@ router.post('/email', requireWebhookToken, upload.none(), async (req: Request, r
 
   const { fromEmail, fromName } = parseFrom(from)
   const toEmail = parseEmail(to)
+  const autoResolverId = await getAutoResolverId()
 
   const ticket = await prisma.ticket.create({
     data: {
@@ -80,6 +94,7 @@ router.post('/email', requireWebhookToken, upload.none(), async (req: Request, r
       messageId,
       inReplyTo,
       status: TicketStatus.new,
+      assignedToId: autoResolverId,
     },
   })
 

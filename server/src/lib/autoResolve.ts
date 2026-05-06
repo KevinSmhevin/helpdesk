@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url'
 import { SenderType } from '@prisma/client'
 import { TicketStatus } from '@helpdesk/core'
 import prisma from './prisma.ts'
+import { AUTO_RESOLVER_EMAIL } from './constants.ts'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const knowledgeBase = readFileSync(join(__dirname, '../data/knowledge-base.md'), 'utf-8')
@@ -20,6 +21,14 @@ const ResolutionSchema = z.object({
     .optional()
     .describe('The reply to send the customer — required when canResolve is true'),
 })
+
+async function getAutoResolverId(): Promise<string | null> {
+  const user = await prisma.user.findUnique({
+    where: { email: AUTO_RESOLVER_EMAIL },
+    select: { id: true },
+  })
+  return user?.id ?? null
+}
 
 export async function autoResolveTicket(
   ticketId: string,
@@ -69,6 +78,8 @@ ${knowledgeBase}`,
     console.error('[auto-resolve] AI call failed for ticket', ticketId, err)
   }
 
+  const autoResolverId = await getAutoResolverId()
+
   try {
     await prisma.$transaction(async (tx) => {
       if (resolvedReply) {
@@ -77,16 +88,31 @@ ${knowledgeBase}`,
             ticketId,
             body: resolvedReply,
             senderType: SenderType.agent,
-            userId: null,
+            userId: autoResolverId,
+          },
+        })
+        await tx.ticket.update({
+          where: { id: ticketId },
+          data: {
+            status: finalStatus,
+            resolvedByAI: true,
+            resolvedAt: new Date(),
+          },
+        })
+      } else {
+        await tx.ticket.update({
+          where: { id: ticketId },
+          data: {
+            status: finalStatus,
+            assignedToId: null,
           },
         })
       }
-      await tx.ticket.update({ where: { id: ticketId }, data: { status: finalStatus } })
     })
   } catch (err) {
     console.error('[auto-resolve] DB transaction failed for ticket', ticketId, err)
     await prisma.ticket
-      .update({ where: { id: ticketId }, data: { status: TicketStatus.open } })
+      .update({ where: { id: ticketId }, data: { status: TicketStatus.open, assignedToId: null } })
       .catch(() => {})
   }
 }

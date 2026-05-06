@@ -13,6 +13,7 @@ import usersRouter from './routes/users.ts'
 import ticketsRouter from './routes/tickets.ts'
 import agentsRouter from './routes/agents.ts'
 import webhooksRouter from './routes/webhooks.ts'
+import dashboardRouter from './routes/dashboard.ts'
 
 if (!process.env.BETTER_AUTH_SECRET || process.env.BETTER_AUTH_SECRET === 'change-me') {
   throw new Error('BETTER_AUTH_SECRET must be set to a strong random value (openssl rand -base64 32)')
@@ -57,6 +58,7 @@ app.use('/api/users', usersRouter)
 app.use('/api/tickets', ticketsRouter)
 app.use('/api/agents', agentsRouter)
 app.use('/api/webhooks', webhooksRouter)
+app.use('/api/dashboard', dashboardRouter)
 
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   const code = (err as { code?: string })?.code
