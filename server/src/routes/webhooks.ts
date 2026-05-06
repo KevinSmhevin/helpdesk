@@ -3,7 +3,8 @@ import type { Request, Response, NextFunction } from 'express'
 import multer from 'multer'
 import prisma from '../lib/prisma.ts'
 import { SendGridWebhookSchema } from '@helpdesk/core'
-import { classifyTicket } from '../lib/classify.ts'
+import boss from '../lib/boss.ts'
+import { CLASSIFY_QUEUE } from '../workers/classify.ts'
 
 const router = Router()
 
@@ -79,11 +80,9 @@ router.post('/email', requireWebhookToken, upload.none(), async (req: Request, r
     },
   })
 
-  res.status(200).json({ ok: true })
+  await boss.send(CLASSIFY_QUEUE, { ticketId: ticket.id, subject: subject.trim(), body: text.trim() })
 
-  classifyTicket(ticket.id, subject.trim(), text.trim()).catch((err) => {
-    console.error('[classify] failed for ticket', ticket.id, err)
-  })
+  res.status(200).json({ ok: true })
 })
 
 export default router

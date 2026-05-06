@@ -6,6 +6,8 @@ import { rateLimit } from 'express-rate-limit'
 import { toNodeHandler } from 'better-auth/node'
 import { auth } from './lib/auth.ts'
 import prisma from './lib/prisma.ts'
+import boss from './lib/boss.ts'
+import { registerClassifyWorker } from './workers/classify.ts'
 import usersRouter from './routes/users.ts'
 import ticketsRouter from './routes/tickets.ts'
 import agentsRouter from './routes/agents.ts'
@@ -68,9 +70,22 @@ async function start() {
   await prisma.$connect()
   console.log('Database connected')
 
-  app.listen(port, () => {
+  await boss.start()
+  await registerClassifyWorker()
+  console.log('Job queue started')
+
+  const server = app.listen(port, () => {
     console.log(`Server running on http://localhost:${port}`)
   })
+
+  async function shutdown() {
+    server.close()
+    await boss.stop()
+    await prisma.$disconnect()
+  }
+
+  process.once('SIGTERM', shutdown)
+  process.once('SIGINT', shutdown)
 }
 
 start().catch((err) => {
